@@ -1492,7 +1492,8 @@ Note that geometry and derivations are mostly taken from [[In-Orbit Space Situat
 Also note that Al-Hourani addresses most things, except no PINNs and it only estimates $\Delta i$ (inclination angle between two orbits) and a phase parameter, so no distance. It also uses Keplerian / circular orbital motion to constrain the Doppler profile but does not do a general 6 state OD. 
 
 Consider two satellites, A and B, with position and velocity vectors $$ \mathbf r_A(t), \qquad \mathbf v_A(t) $$ and $$ \mathbf r_B(t), \qquad \mathbf v_B(t). $$ The relative position of B with respect to A is $$ \Delta \mathbf r(t) = \mathbf r_B(t)-\mathbf r_A(t) $$ and the relative velocity is $$ \Delta \mathbf v(t) = \mathbf v_B(t)-\mathbf v_A(t). $$ The instantaneous distance between the two satellites is therefore $$ \rho(t) = \|\Delta\mathbf r(t)\| = \|\mathbf r_B(t)-\mathbf r_A(t)\|. $$ The rate of change of this distance, or **range-rate**, is $$ \dot\rho(t) = \frac{ \Delta\mathbf r(t)\cdot\Delta\mathbf v(t) }{ \|\Delta\mathbf r(t)\| }. $$ This can also be written as $$ \dot\rho(t) = \hat{\boldsymbol\rho}(t)\cdot\Delta\mathbf v(t), $$ where $$ \hat{\boldsymbol\rho}(t) = \frac{\Delta\mathbf r(t)} {\|\Delta\mathbf r(t)\|} $$ is the unit line-of-sight vector from A to B. The measured Doppler frequency shift is related to the inter-satellite range-rate by $$ f_D(t) = -\frac{f_0}{c}\dot\rho(t), $$ where - $f_0$ is the transmitted carrier frequency, - $c$ is the speed of light, - $\dot\rho$ is the inter-satellite range-rate. Equivalently, $$ \dot\rho(t) = -\frac{c}{f_0}f_D(t). $$ Therefore, a Doppler measurement gives information about the component of the relative velocity along the line joining the two satellites. A single Doppler measurement provides only one scalar quantity and is therefore not sufficient by itself to determine the full three-dimensional relative state $$ \mathbf x_{\mathrm{rel}} = \begin{bmatrix} \Delta\mathbf r\\ \Delta\mathbf v \end{bmatrix}. $$ Instead, a **time history of Doppler measurements** $$ f_D(t_1),\, f_D(t_2),\, \dots,\, f_D(t_N) $$ is combined with an orbital dynamics model. For a trial set of unknown parameters $\mathbf p$, the corresponding orbit is propagated to every measurement time $t_k$ and a predicted Doppler history is generated: $$ \mathbf p \rightarrow \mathbf r_B(t),\mathbf v_B(t) \rightarrow \dot\rho(t) \rightarrow f_D^{pred}(t). $$The estimated parameters are obtained by minimising the difference between the predicted and measured Doppler histories: $$ \boxed{ \hat{\mathbf p} = \arg\min_{\mathbf p} \sum_{k=1}^{N} \left( f_{D,k}^{pred}(\mathbf p) - f_{D,k}^{meas} \right)^2 } $$ The definition of the parameter vector $\mathbf p$ depends on the assumptions made in each experiment. For example, in the first simplified circular co-altitude case, $$ \mathbf p = [i_B,\Omega_B,u_{B,0}], $$
-whereas later experiments may estimate a larger set of orbital elements or the full Cartesian state. The general estimation problem can therefore be summarised as $$ \boxed{ \text{Doppler measurements} + \text{orbital dynamics} \rightarrow \text{estimate the unknown state} } $$
+whereas later experiments may estimate a larger set of orbital elements or the full Cartesian state. The general estimation problem can therefore be summarised as 
+$$ \boxed{ \text{Doppler measurements} + \text{orbital dynamics} \rightarrow \text{estimate the unknown state} } $$
  
 #### Experiment 1 - Baseline circular orbit & same altitude
 
@@ -1535,8 +1536,6 @@ or equivalently
 $$\dot \rho = - \frac{c}{f_0}f_D \tag{7}$$
 
 A single Doppler measurement is not sufficient to determine the full state of B. Instead, a **time history of Doppler measurements** is used to determine which initial state of B produces the observed Doppler evolution when propagated using the orbital dynamics.
-
-
 ##### Circular parameterization 
 Satellite A's state is assumed to be known:
 
@@ -1658,6 +1657,7 @@ Main functions:
 	The parameters are estimated using SciPy's nonlinear least-squares optimiser.
 
 ##### Results 
+*Script run is "Doppler/scripts/step1_baseline.py"*
 Initial guess is: 
 $[48^\circ,10^\circ,35^\circ]$
 
@@ -1678,6 +1678,7 @@ Is the Doppler-only solution unique? Although Experiment 1 recovered the correct
 Repeat the optimisation from several widely separated initial guesses while keeping the truth scenario, measurements and estimator unchanged.
 
 ##### Results 
+*Script run is "Doppler/scripts/step1_baseline.py"*
 
 | Run      | Initial guess $[i,\Omega,u_0]$    | Final position error | Final velocity error |    Max Doppler residual |
 | -------- | --------------------------------- | -------------------: | -------------------: | ----------------------: |
@@ -1716,6 +1717,454 @@ The next step is therefore to keep the current idealised model unchanged and inv
 Do note that: a single Doppler measurement gives only one scalar,
  $\dot{\rho} = \hat{\boldsymbol{\rho}}\cdot\Delta\mathbf v,$ 
 so it measures only the relative velocity component along the instantaneous line of sight. It does not directly give the transverse components or the full 3D geometry. Which matches with what we've just discovered.
-#### Experiment 3 - Non-uniqueness 
+#### Experiment 3 - Mapping the Doppler Ambiguity
 
-##### 
+##### Purpose
+Experiment 2 showed that different initial estimates can converge to physically different orbits while producing essentially identical Doppler measurements.
+
+The aims of this experiment are therefore to:
+
+1. determine how many distinct physical solutions are repeatedly recovered;
+2. check whether these solutions really produce the same measurement history;
+3. understand the geometrical reason for the ambiguity.
+
+No physical assumptions or measurements are changed from the previous experiment.
+
+##### Method
+The physical problem remains:
+
+- satellite A is perfectly known;
+- both satellites are in circular LEO orbits;
+- both satellites have the same known orbital radius;
+- two-body Earth dynamics are used;
+- Doppler measurements are noise-free;
+- the same truth orbit and measurement times are used in every run.
+
+Satellite B is parameterised by
+
+$$
+\mathbf p
+=
+[i_B,\Omega_B,u_{B,0}].
+$$
+
+A total of 1000 initial estimates were randomly sampled across
+
+$$
+i_B\in[0,\pi], \qquad \Omega_B\in[-\pi,\pi], \qquad u_{B,0}\in[-\pi,\pi].
+$$
+
+For each initial estimate, the same nonlinear least-squares problem was solved:
+
+$$
+\hat{\mathbf p}
+=
+\arg\min_{\mathbf p}
+\sum_{k=1}^{N}
+\left(
+f_{D,k}^{pred}(\mathbf p)
+-
+f_{D,k}^{meas}
+\right)^2.
+$$
+
+The only quantity changed between runs is the initial estimate supplied to the optimiser.
+
+The purpose of using many starting points is to explore the global solution space. If the measurements uniquely determine the orbit, all **measurement-valid** solutions should correspond to the same physical state. If several physical states can reproduce the measurements, different initial estimates may converge to different branches.
+
+##### Results
+Each valid estimate was converted from orbital parameters to its Cartesian initial state. The solutions were then grouped using Cartesian position and velocity rather than orbital-element values. 
+
+The 898 valid solutions collapsed into **four distinct physical solution branches**.
+
+| Branch | Runs | $i_B$ | $\Omega_B$ | $u_{B,0}$ | Position difference from truth | Velocity difference from truth |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 224 | $40.3866^\circ$ | $-12.1641^\circ$ | $-5.5543^\circ$ | $8038.36$ km | $8.729$ km/s |
+| 2 | 207 | $47.1861^\circ$ | $-16.7991^\circ$ | $65.3322^\circ$ | $962.36$ km | $3.188$ km/s |
+| 3 | 204 | $55.0000^\circ$ | $15.0000^\circ$ | $45.0000^\circ$ | $\approx0$ | $\approx0$ |
+| 4 | 263 | $60.5604^\circ$ | $9.0197^\circ$ | $-19.3394^\circ$ | $7888.19$ km | $8.343$ km/s |
+
+Branch 3 corresponds to the true simulated orbit.
+
+The maximum spread within an individual cluster was below approximately $4.4\times10^{-10}\ {\rm km}$
+in position and $4.8\times10^{-13}\ {\rm km\,s^{-1}}$ in velocity.
+
+The clusters are therefore effectively four precise Cartesian states.
+
+In contrast, different branches are separated by approximately $962-8038\ {\rm km}$ in position and $2.064-8.729\ {\rm km\,s^{-1}}$ in velocity.
+
+The four branches are therefore physically very different orbits.
+
+For every branch, the complete inter-satellite range history was calculated:
+
+$$
+\rho_j(t)
+=
+\left\|
+\mathbf r_{B,j}(t)
+-
+\mathbf r_A(t)
+\right\|.
+$$
+
+The maximum difference between any two branch range histories was approximately $1.2\times10^{-10}\ {\rm km}.$ This corresponds to approximately $1.2\times10^{-7}\ {\rm m},$ and is consistent with numerical floating-point precision.
+
+Therefore, numerically,
+
+$$\boxed{\rho_1(t) \approx \rho_2(t) \approx \rho_3(t) \approx \rho_4(t)}$$
+
+throughout the complete observation arc.
+
+This explains why all four branches also have the same initial range:
+
+$$
+\rho_0
+\approx
+4231.498301\ {\rm km}.
+$$
+
+The equality is not restricted to $t=0$.
+
+The entire range-versus-time function is the same.
+
+Therefore,
+
+$$
+\dot\rho_1(t)
+\approx
+\dot\rho_2(t)
+\approx
+\dot\rho_3(t)
+\approx
+\dot\rho_4(t).
+$$
+
+Since
+
+$$
+f_D(t)
+=
+-\frac{f_0}{c}\dot\rho(t),
+$$
+
+the Doppler histories must also be identical.
+
+The largest pairwise Doppler difference was approximately  $1.2\times10^{-10}\ {\rm Hz}.$
+
+Therefore,
+$$
+\boxed{
+\rho(t)\ {\rm identical}
+\Rightarrow
+\dot\rho(t)\ {\rm identical}
+\Rightarrow
+f_D(t)\ {\rm identical}.
+}
+$$
+
+The Doppler measurements therefore cannot distinguish between the four branches under the current assumptions.
+
+###### Figure 1 
+![C:\Users\xnb26181\Documents\RODINN\Doppler\figures\step2_doppler_histories.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Doppler/figures/step2_doppler_histories.png)
+The Doppler histories generated by all four recovered branches overlap exactly at the scale of the measurement. Direct subtraction shows differences only of order $10^{-11}–10^{-10}\,\mathrm{Hz}$, consistent with numerical precision. Therefore the four physically distinct states are indistinguishable under the current Doppler measurement model.
+
+###### Figure 2
+![C:\Users\xnb26181\Documents\RODINN\Doppler\figures\step2_initial_guesses_by_branch.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Doppler/figures/step2_initial_guesses_by_branch.png)
+The four branches possess distinct but overlapping convergence basins in the three-dimensional initial-parameter space. The 2D projections reveal clear structure, particularly with respect to initial phase, but cannot fully represent the three-dimensional basin boundaries.
+
+###### Figure 3
+![C:\Users\xnb26181\Documents\RODINN\Doppler\figures\step2_maximum_residuals.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Doppler/figures/step2_maximum_residuals.png)
+The measurement-valid and invalid solutions form clearly separated populations. All valid branches reproduce the Doppler history with maximum residuals of approximately $10^{-10}\,\mathrm{Hz}$, whereas the best rejected fit has a residual of approximately $131\,\mathrm{Hz}$. The $10^{-7},\mathrm{Hz}$ validity threshold therefore lies within a large empty gap and does not determine the observed four-branch structure.
+
+
+###### Figure 4
+![C:\Users\xnb26181\Documents\RODINN\Doppler\figures\step2_orbit_geometry.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Doppler/figures/step2_orbit_geometry.png)
+
+###### Figure 5
+![C:\Users\xnb26181\Documents\RODINN\Doppler\figures\step2_range_histories.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Doppler/figures/step2_range_histories.png)
+Although the four branches correspond to different three-dimensional orbits, their complete A-to-B range histories are identical to numerical precision. Pairwise range differences remain of order $10^{-10}\,\mathrm{km}$. Consequently, differentiation gives the same range-rate history and therefore the same Doppler history.
+
+##### Geometrical explanation
+
+The four branches can be explained by two symmetries of the circular, co-altitude geometry.
+
+For a circular orbit, define
+
+$$
+\mathbf u(t)
+=
+\begin{bmatrix}
+\cos nt\\
+\sin nt\\
+0
+\end{bmatrix},
+$$
+
+where
+
+$$
+n
+=
+\sqrt{\frac{\mu}{a^3}}
+$$
+
+is the common orbital angular rate.
+
+The positions of A and B can be written as
+
+$$
+\mathbf r_A(t)
+=
+aC_A\mathbf u(t)
+$$
+
+and
+
+$$
+\mathbf r_B(t)
+=
+aC_B\mathbf u(t),
+$$
+
+where
+
+$$
+C_A
+=
+R_3(\Omega_A)R_1(i_A)R_3(u_{A,0})
+$$
+
+and
+
+$$
+C_B
+=
+R_3(\Omega_B)R_1(i_B)R_3(u_{B,0}).
+$$
+
+Because both satellites have the same angular rate, $C_A$ and $C_B$ are constant.
+
+Define the constant relative rotation
+
+$$
+R
+=
+C_A^TC_B.
+$$
+
+The angle between the two satellite position vectors satisfies
+
+$$
+\cos\psi(t)
+=
+\mathbf u(t)^TR\mathbf u(t).
+$$
+
+Since both satellites have the same orbital radius,
+
+$$
+\boxed{
+\rho^2(t)
+=
+2a^2
+\left[
+1-\mathbf u(t)^TR\mathbf u(t)
+\right].
+}
+$$
+
+Therefore, any transformation that leaves
+
+$$
+\mathbf u^TR\mathbf u
+$$
+
+unchanged will also leave the range, range-rate and Doppler histories unchanged.
+
+
+###### Symmetry 1 - Traspose
+The quantity
+$$
+\mathbf u^TR\mathbf u
+$$
+is a scalar, so
+
+$$
+\boxed{
+\mathbf u^TR\mathbf u
+=
+\mathbf u^TR^T\mathbf u.
+}
+$$
+
+Replacing the relative rotation $R$ with $R^T=R^{-1}$ does not change the range history. 
+
+The numerical tests confirm the transpose relationships are
+$$
+\boxed{
+1\leftrightarrow3
+}
+$$
+and
+$$
+\boxed{
+2\leftrightarrow4.
+}
+$$
+
+Since Branch 3 is the truth branch, Branch 1 is therefore the transpose/inverse relative-rotation counterpart of the truth.
+
+###### Symmetry 2 - Reflection
+In A's orbital-frame, reflection across A's plane can be written as
+
+$$
+D
+=
+\begin{bmatrix}
+1&0&0\\
+0&1&0\\
+0&0&-1
+\end{bmatrix}.
+$$
+
+Because satellite A always lies in the plane,
+
+$$
+D\mathbf u(t)
+=
+\mathbf u(t).
+$$
+
+Consider the transformed relative rotation
+
+$$
+R'
+=
+DRD.
+$$
+
+Then
+$$
+\mathbf u^TR'\mathbf u
+=
+\mathbf u^TDRD\mathbf u.
+=
+\mathbf u^TR\mathbf u.
+$$
+
+Reflection therefore also leaves the range and Doppler histories unchanged.
+
+The numerical Cartesian reflection test confirms
+
+$$
+1\leftrightarrow4
+$$
+
+and
+
+$$
+2\leftrightarrow3.
+$$
+
+The remaining position and velocity differences after reflection are at numerical precision.
+
+###### Why four branches
+For the current geometry, the two binary symmetries generate four distinct relative configurations:
+
+$$ R, \qquad R^T, \qquad DRD, \qquad DR^TD.
+$$
+
+The observed branches correspond to
+
+$$
+\boxed{
+\begin{aligned}
+\text{Branch 3} &\leftrightarrow R
+&&\text{(truth)},\\
+\text{Branch 1} &\leftrightarrow R^T,\\
+\text{Branch 2} &\leftrightarrow DRD,\\
+\text{Branch 4} &\leftrightarrow DR^TD.
+\end{aligned}
+}
+$$
+
+The relationships can be visualised as
+
+$$
+\begin{array}{ccc}
+\text{Branch 3} & \xleftrightarrow{\quad \text{transpose}\quad} & \text{Branch 1}\\
+\updownarrow\text{ reflection} && \updownarrow\text{ reflection}\\
+\text{Branch 2} & \xleftrightarrow{\quad \text{transpose}\quad} & \text{Branch 4}
+\end{array}
+$$
+
+Thus, for this particular non-degenerate geometry,
+
+$$
+\boxed{
+2\ {\rm transpose\ possibilities}
+\times
+2\ {\rm reflection\ possibilities}
+=
+4\ {\rm distinct\ branches}.
+}
+$$
+
+All four preserve the quantity
+
+$$
+\mathbf u^TR\mathbf u,
+$$
+
+so they also preserve
+
+$$
+\rho(t),
+\qquad
+\dot\rho(t),
+\qquad
+f_D(t).
+$$
+
+##### Conclusions 
+The multi-start experiment recovered four isolated physical solution branches within the investigated parameter domain.
+
+Although these states differ in position and in velocity, they reproduce the same complete range, range-rate and Doppler histories to numerical precision.
+
+The ambiguity is therefore not caused by optimiser failure.
+
+Instead, the current circular, co-altitude measurement model contains geometric symmetries that make physically different states indistinguishable to Doppler.
+
+Therefore,
+**A perfect Doppler fit does not return a unique physical orbit**
+
+The result also explains why the previous local Jacobian analysis did not reveal the problem.
+
+Around each individual branch, small parameter changes alter the Doppler history, so a branch can be locally well constrained.
+
+However, distant symmetry-related states produce exactly the same observations.
+
+Therefore,
+
+$$
+\boxed{
+\text{local identifiability}
+\neq
+\text{global identifiability}.
+}
+$$
+
+The symmetry analysis establishes that the current problem is globally non-unique.
+
+The multi-start search consistently found four branches, and the observed branches are explained by transpose/inverse and orbital-plane-reflection symmetries. However, the finite multi-start experiment alone does not prove that no additional global solutions exist.
+
+> Under the current circular, co-altitude assumptions, a single Doppler history does not uniquely determine the physical orbit of B. Four distinct solution branches were recovered numerically, and the branches produce identical range, range-rate and Doppler histories because of two discrete geometric symmetries.
+
+Al-Hourani's reduced two-parameter problem has one solution, but that one relative solution corresponds to four distinct full Cartesian states in my parameterisation
+
+----
+
+
+
+Experiment 4
+What transformation takes the true orbit into each alternative orbit while leaving $\rho(t),$ $\dot\rho(t)$, and therefore $f_D(t)$ unchanged?

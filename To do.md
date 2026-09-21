@@ -1,14 +1,14 @@
-Message Beth
-Sincronizar Obsidian
+Walk through tomorrow
 Picture for ApSTL
 Proposal ESA?
-understand the Doppler ambiguity
+
+Understand the Doppler ambiguity
 
 
-## order to follow
+## Order to follow
 
 1. **Freeze current model as “Baseline Problem”.** Keep circular, same altitude, known A, two-body, continuous sampling, no noise. You now know the code works. Save this version and do not keep modifying it. Your first result is: _the true solution can be recovered, but the Doppler-only problem has other solutions too.
-2. **Investigate the non-uniqueness next.** This is now the most important question. Before worrying about noise, J2J_2, eccentricity, etc., you need to understand why different B orbits can produce the same Doppler. Work out the reflection symmetry mathematically, run many initial guesses, and identify how many distinct solution families exist. This is an **observability/identifiability problem**, not an optimiser problem. Al-Hourani's simplified co-shell model already shows how strongly the Doppler profile is tied to relative inclination and phase, so it remains your main reference here.
+2. **Investigate the non-uniqueness next.** This is now the most important question. Before worrying about noise, J_2, eccentricity, etc., you need to understand why different B orbits can produce the same Doppler. Work out the reflection symmetry mathematically, run many initial guesses, and identify how many distinct solution families exist. This is an **observability/identifiability problem**, not an optimiser problem. Al-Hourani's simplified co-shell model already shows how strongly the Doppler profile is tied to relative inclination and phase, so it remains your main reference here.
 3. **Then study initialisation.** Once you know what the valid solution branches look like, ask: _given an initial guess, which solution does the optimiser converge to?_ Use increasingly bad starting guesses, random/multistart guesses, and eventually physically motivated guesses. This should be its own experiment, because initialisation does not change the measurement physics. Psiaki explicitly tested convergence from large initial errors using nonlinear least squares, which makes that paper especially relevant at this stage. Shi et al. similarly found that Doppler positioning can fail when the initial position is too far from the truth, so initialization sensitivity is a legitimate research question rather than merely a coding detail.
 4. **Then study the information content of the Doppler history.** Keep the model noise-free and vary only things that affect observability: observation arc, relative inclination, RAAN/phase geometry, and separation. This answers questions such as “How long do I need to observe?” and “Which geometries are weak or impossible?” Lin is useful here because they explicitly note that same-plane/similar relative motion can produce nearly zero useful Doppler and that geometry/visibility determines whether adequate observations are available. Turan should become one of your main references at this stage because its focus is much more explicitly on observability and inter-satellite tracking.
 5. **Only after the ideal problem is understood, make the measurements imperfect.** Add Doppler noise first. Then change cadence. Then introduce gaps/LOS constraints. Then frequency/clock bias. Do one at a time. At this stage, you are asking about **robustness**, not basic identifiability.
@@ -30,5 +30,25 @@ I would make one small literature matrix in your notes with columns like **paper
 
 
 
+After identifying the fundamental Doppler ambiguity, you can ask:
+<u>What is the minimum additional information required to make the state unique?</u>
 
+You can test progressively:
 
+- Doppler only;
+- Doppler + coarse orbital prior;
+- Doppler + known orbital-plane side;
+- Doppler + one angle observation;
+- Doppler + occasional angles;
+- Doppler + range;
+- Doppler + second Doppler link.
+
+And distinguish two things every time:
+
+Does it break the mathematical ambiguity?
+
+versus
+
+Does it merely help the optimiser converge?
+
+For the **current pure-Doppler experiment**, though, I would leave the four branches unconstrained until we finish deriving exactly why they exist. Adding constraints now would hide the very structure we are trying to understand.
