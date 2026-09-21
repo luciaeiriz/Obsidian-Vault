@@ -1,0 +1,44 @@
+{
+  "collapse-filter": false,
+  "search": "-path:Templates -path:Rule",
+  "showTags": false,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "path:Papers  ",
+      "color": {
+        "a": 1,
+        "rgb": 14048348
+      }
+    },
+    {
+      "query": "path:Knowledge  ",
+      "color": {
+        "a": 1,
+        "rgb": 14069084
+      }
+    },
+    {
+      "query": "path:\"Lab book\"  ",
+      "color": {
+        "a": 1,
+        "rgb": 11392604
+      }
+    }
+  ],
+  "collapse-display": false,
+  "showArrow": false,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1.11441951219512,
+  "lineSizeMultiplier": 1.05322926829268,
+  "collapse-forces": false,
+  "centerStrength": 0.300682926829268,
+  "repelStrength": 10,
+  "linkStrength": 1,
+  "linkDistance": 250,
+  "scale": 0.25883865621816027,
+  "close": true
+}

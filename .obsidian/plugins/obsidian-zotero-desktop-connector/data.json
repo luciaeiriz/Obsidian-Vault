@@ -1,0 +1,28 @@
+{
+  "database": "Zotero",
+  "noteImportFolder": "Inbox/",
+  "pdfExportImageDPI": 120,
+  "pdfExportImageFormat": "jpg",
+  "pdfExportImageQuality": 90,
+  "citeFormats": [
+    {
+      "name": "Cite",
+      "format": "pandoc",
+      "cslStyle": "BibLaTex"
+    }
+  ],
+  "exportFormats": [
+    {
+      "name": "Papers",
+      "outputPathTemplate": "Papers/{{title}}.md",
+      "imageOutputPathTemplate": "Papers/{{title}}/",
+      "imageBaseNameTemplate": "Papers",
+      "templatePath": "Templates/paper.md"
+    }
+  ],
+  "citeSuggestTemplate": "[[{{title}}]]",
+  "openNoteAfterImport": true,
+  "whichNotesToOpenAfterImport": "first-imported-note",
+  "shouldConcat": true,
+  "exeOverridePath": ""
+}

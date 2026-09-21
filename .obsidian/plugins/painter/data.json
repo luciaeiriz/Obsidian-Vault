@@ -1,0 +1,29 @@
+{
+  "highlighterStyle": "realistic",
+  "highlighterMethods": "inline-styles",
+  "highlighters": {
+    "Grey": "#9c9c9c",
+    "Aqua": "#43BDC9ff",
+    "Magenta": "#F272D4ff",
+    "Red": "#fd214d75",
+    "Yellow": "#fbed89ff",
+    "Blue": "#24CAFFff",
+    "Green": "#9bd68fff",
+    "Purple": "#B272F2ff",
+    "Orange": "#f7784aff"
+  },
+  "highlighterOrder": [
+    "Grey",
+    "Aqua",
+    "Magenta",
+    "Red",
+    "Yellow",
+    "Blue",
+    "Green",
+    "Purple",
+    "Orange"
+  ],
+  "menuMode": "normal",
+  "cleanSelectors": [],
+  "overwriteMarks": true
+}

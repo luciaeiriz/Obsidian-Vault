@@ -1,0 +1,1721 @@
+ 
+# Angle only Orbit Determination
+I decided to focus initially on **angle-only relative orbit determination (ROD)** before moving on to the Doppler-based problem. I have taken separate notes on the relevant mathematical background in [[Angle ROD]].
+
+The aim is to first build a simple, controlled angle-only OD problem and understand the classical estimation process before introducing additional complexity.
+
+The overall problem can be viewed as an inverse problem:
+
+$\text{known orbital states} \longrightarrow \text{simulated measurements}$
+
+for the forward problem, and
+
+$\text{measured angles} \longrightarrow \text{estimated orbital state}$
+
+for the orbit-determination problem.
+
+---
+
+All the code for the following Angle OD calculation is inside the "RODINN/Angle_OD" folder
+## 1. Simulate the Angle Measurement Process
+
+The first stage is to create a controlled simulation in which the true orbits of two satellites are known and angle measurements are generated from their relative geometry.
+
+The basic process is:
+
+$\boxed{\text{Known orbits} \rightarrow \text{relative geometry} \rightarrow \text{simulated angle measurements}}$
+
+The true orbital states are retained in the simulation so that the eventual estimated orbit can be compared against the known solution.
+
+##### Simulation parameters
+
+- Satellite A altitude: 700 km
+- Satellite B altitude: 710 km
+- Both satellites are in circular, coplanar orbits.
+- Initial phase separation: 2°
+- Orbital period A: 98.77 min
+- Orbital period B: 98.98 min
+- Simulation span: 120 min (approximately 1.21 orbits of A)
+- Measurement angular noise: 0.01°
+- Both satellites have $z=0$ throughout the simulation.
+
+The true relative range varies from approximately:
+
+$\rho_{\min}=133.24~\text{km}$
+to
+$rho_{\max}=247.44~\text{km}.$
+
+
+##### Running `step1_measurement_simlation.py` gives the following summary:
+Orbital period A: 98.77 min
+Orbital period B: 98.98 min
+Simulated span:   120.00 min (1.21 orbits of A)
+True range: min 133.24 km, max 247.44 km
+
+###### Plot 1 — Absolute Orbits
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step1_Figure1.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step1_Figure1.png)
+This plot shows the two satellite orbits in the inertial frame, together with a grey Earth sphere for scale.
+
+Because the two satellites have very similar orbital radii (700 km and 710 km altitude) and are exactly coplanar, their trajectories appear almost as a single ring around the Earth.
+
+Approximately 1.2 orbital revolutions are shown, consistent with the 120-minute simulation span and the approximately 99-minute orbital period.
+
+This plot is primarily a sanity check confirming that the simulated trajectories represent physically reasonable circular LEO orbits. The more interesting relative-motion behaviour is shown in the subsequent plots.
+
+###### Plot 2 — Relative Range
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step1_Figure2.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step1_Figure2.png)
+The relative range is defined as
+
+$\rho(t) = \left\| \mathbf r_B(t)-\mathbf r_A(t) \right\|$
+
+The simulated range decreases smoothly from approximately 247 km to 133 km over the two-hour observation arc. This behaviour is caused by the difference in orbital periods.
+
+Satellite A is at the lower altitude and therefore has the shorter orbital period:
+
+$T_A = 98.77~\text{min}, \qquad T_B = 98.98~\text{min}$
+
+From Kepler's third law,
+
+$T \propto a^{3/2},$
+
+so the lower-altitude satellite has the larger angular orbital rate.
+
+Satellite A therefore gradually catches up with satellite B, which initially has a 2° phase lead. The angular separation decreases throughout the simulated interval, producing the observed decrease in relative range.
+
+This is the quantity that an <u>angle-only sensor cannot directly determine from a single measurement.</u> A single bearing measurement only establishes the direction of the line of sight; it does not determine how far away satellite B is along that line.
+
+However, range may become observable from a <u>sequence of angular measurements</u> when those measurements are combined with the known trajectory of A and the assumed orbital dynamics. This is the inverse problem that will be investigated in the subsequent stages.
+
+The true range is retained in the simulation only so that the eventual estimated trajectory can be validated against it.
+
+###### Plot 3 — Relative Position Components
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step1_Figure3.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step1_Figure3.png)
+The relative position is
+
+$\mathbf r_{\mathrm{rel}}(t) = \mathbf r_B(t)-\mathbf r_A(t)$
+
+The components $\left(x_{\mathrm{rel}},y_{\mathrm{rel}},z_{\mathrm{rel}}\right)$ are plotted separately. 
+
+- The $y_{\mathrm{rel}}$ component dominates and decreases in magnitude over the observation period, reflecting the fact that the satellites' separation is primarily along-track.
+- The $x_{\mathrm{rel}}$ component is smaller and varies more slowly.
+- The $z_{\mathrm{rel}}$ component remains exactly zero throughout the simulation:
+
+$z_{\mathrm{rel}}(t)\equiv0$
+
+This follows directly from the choice of coplanar initial conditions and dynamics.
+
+It is important to distinguish the behaviour of the individual components from that of the total range. The components are not expected to decrease monotonically because they are expressed in a **fixed inertial coordinate frame**. As the satellites orbit Earth, their relative-position vector rotates through these fixed axes.
+
+The situation is analogous to two people standing close together on a rotating carousel. Their separation may change relatively slowly, but their coordinates measured with respect to a fixed external coordinate system rotate as the carousel moves.
+
+Thus, the relative range can decrease smoothly while the individual inertial-frame components oscillate.
+
+###### Plot 4 — Relative Position in the $x$-$y$ Plane![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step1_Figure4.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step1_Figure4.png)
+This plot shows
+$y_{\mathrm{rel}} \quad\text{against}\quad x_{\mathrm{rel}}$   
+giving the trajectory traced by the relative-position vector in the inertial frame.
+
+The trajectory begins at the initial relative position and ends at the relative position after 120 minutes.
+
+Because
+$z_{\mathrm{rel}}\equiv0$
+the relative trajectory is genuinely two-dimensional in this simulation rather than being a projection of a three-dimensional trajectory.
+
+The resulting curve is open rather than closed because the simulation does not cover a complete cycle of the relative orbital geometry.
+
+This should <u>not</u> be interpreted as a Hill/LVLH relative orbit, since the coordinates are still expressed in the inertial frame. It is simply a visualisation of the relative position vector using inertial-frame components.
+
+A later experiment can transform the relative state into a rotating reference frame such as RTN/LVLH to examine the relative motion in a more conventional relative-orbit representation.
+
+###### Plot 5 — Inertial-Frame Azimuth
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step1_Figure5.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step1_Figure5.png)
+The azimuth angle is calculated in the fixed inertial coordinate frame.
+
+Because the reference frame itself does not rotate with satellite A, the measured azimuth contains a large contribution from the orbital motion of the satellites.
+
+Over approximately 1.21 orbits, the line-of-sight direction therefore undergoes a large angular sweep.
+
+The azimuth also crosses the $\pm180^\circ$ branch cut. This produces an apparent discontinuity in the plotted angle, where the value changes from approximately $+180^\circ$ to $-180^\circ$.
+
+This is not a physical discontinuity. The two angles represent the same direction:
+$+180^\circ \equiv -180^\circ$
+
+The simulated azimuth starts at approximately $88.68^\circ$ and reaches approximately $179.46^\circ$ after 25 minutes before wrapping to approximately $-179.94^\circ$.
+
+The measurement noise of 0.01° is very small compared with the overall angular sweep, so the noisy measurements appear almost indistinguishable from the true azimuth at this scale.
+
+The important point is that the inertial-frame azimuth contains both:
+
+1. the large angular variation associated with the orbital motion of the satellites, and
+2. the smaller variation associated with their changing relative geometry.
+
+This makes the relative-motion contribution difficult to interpret directly in the inertial-frame representation.
+
+A later investigation could therefore consider expressing the measurements in a reference frame attached to satellite A.
+
+###### Plot 6 — Elevation
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step1_Figure6.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step1_Figure6.png)
+The true elevation remains exactly zero:
+
+$\theta_{\mathrm{el}}(t)=0$
+
+The measured elevation values scatter around zero with a standard deviation of approximately 0.01°.
+
+This follows directly from the planar geometry of the simulation:
+
+$z_{\mathrm{rel}}(t)\equiv0$
+
+Consequently, elevation provides no useful information about the out-of-plane state in this particular experiment.
+
+This is an intentional simplification of the first experiment rather than a general property of angle-only OD.
+
+A later experiment should introduce non-coplanar geometry ($z\neq0$) so that elevation contributes information to the estimation problem.
+
+##### Animated plot
+###### Plot 1
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\baseline_animation.gif](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/baseline_animation.gif)
+
+First panel: the 3D orbit view
+Second panel: relative position  
+Third panel: showing the same relative position projected into A's rotating RTN frame.
+
+
+---
+## 2. Hide the Truth and Construct an Initial Guess
+
+The purpose of this stage is to establish a strict separation between the information available to the estimator and the information retained only for later validation.
+
+The estimator should solve the inverse problem without being given the true state of satellite B.
+
+The dataset therefore contains two logically separate groups:
+
+$\boxed{\text{Observations}} \qquad\text{and}\qquad \boxed{\text{Truth}}$
+
+The estimator is allowed to access only the observations.
+
+##### Information available to the estimator
+
+The estimator receives:
+
+|Observation|Shape / value|
+|---|---|
+|`times_s`|array $(721,)$|
+|`position_A_m`|array $(721,3)$|
+|`velocity_A_m`|array $(721,3)$|
+|`measured_azimuth_rad`|array $(721,)$|
+|`measured_elevation_rad`|array $(721,)$|
+|`angle_noise_sigma_deg`|0.01°|
+
+These represent the quantities that a real estimator is assumed to have available.
+
+In particular, satellite A's own trajectory is treated as known:
+
+$\mathbf r_A(t),\qquad \mathbf v_A(t)$
+
+This corresponds to the assumption that A has access to sufficiently accurate absolute navigation information, for example from an onboard navigation system.
+
+The angle measurements are noisy observations:
+
+$\mathbf z_k = h(\mathbf x_B(t_k),\mathbf r_A(t_k)) + \boldsymbol\epsilon_k,$
+
+where $\boldsymbol\epsilon_k$ represents measurement noise.
+
+##### Hidden truth
+
+The following quantities are retained but are **not available to the estimator**:
+
+| Truth                 | Shape           |
+| --------------------- | --------------- |
+| `position_B_m`        | array $(721,3)$ |
+| `velocity_B_m`        | array $(721,3)$ |
+| `relative_position_m` | array $(721,3)$ |
+| `true_range_m`        | array $(721,)$  |
+| `true_azimuth_rad`    | array $(721,)$  |
+| `true_elevation_rad`  | array $(721,)$  |
+
+These quantities represent the actual simulated state and the corresponding noise-free measurements.
+
+They are used only for validation after an estimate has been produced.
+
+For example, once an estimated state $\hat{\mathbf x}_B(0)$ has been obtained and propagated, it can be compared with the hidden truth:
+
+$\hat{\mathbf x}_B(t)-\mathbf x_B(t)$
+
+Similarly, an estimated relative trajectory can be compared with the true relative trajectory.
+
+The hidden truth therefore acts as the **ground truth for evaluating the estimator**, but does not appear in the estimation cost function.
+
+##### Implied angular measurement uncertainty
+
+The angular measurement noise can be converted into an approximate transverse displacement at a given range.
+
+For a small angular error,
+
+$\sigma_\perp \approx \rho\,\sigma_\theta,$
+
+where $\rho$ is the true range and $\sigma_\theta$ is the angular standard deviation in radians.
+
+For the simulated measurement noise,
+
+$\sigma_\theta = 0.01^\circ = 1.745\times10^{-4}\text{ rad}.$
+
+Using the true range gives an approximate transverse displacement of:
+
+$23.3~\text{m} \quad\text{to}\quad 43.2~\text{m}$
+
+over the simulated observation arc.
+
+The corresponding plot therefore decreases smoothly from approximately 43 m to 23 m as the satellites approach one another.
+
+This should be interpreted as the **instantaneous transverse displacement corresponding to the angular measurement noise**, rather than as the final achievable orbit-estimation uncertainty.
+
+The actual OD accuracy will also depend on the observation geometry, observation arc, measurement cadence, dynamical model, initial conditions and observability of the state.
+
+---
+
+## 3. Construct a Deliberately Poor Initial Guess
+
+Before any fitting can begin, the estimator needs a starting point — but one built honestly, using only what it's actually allowed to see (the same Observations split out in section 2), never by peeking at B's real state.
+
+**Position.** The very first recorded bearing tells you which direction B was in, and that direction is genuinely trustworthy — a bearing-only sensor is good at "which way," it's "how far" it can never resolve from a single reading. So the position guess starts at A's own location and walks out along that direction. How far to walk is simply picked — 500 km — while the real distance at that moment was 247.44 km. That's a 252.56 km mistake, made in precisely the one dimension a single bearing can't see, which is the point: it forces the fitting stage in section 4 to recover range from the *pattern* of bearings over time, not from being handed it.
+
+**Velocity.** A single frame says nothing about speed either, so a simple stand-in fills the gap: assume B is on a circular orbit at whatever distance was just guessed, moving in whichever direction keeps it going around Earth rather than falling in or flying outward. That direction is built from A's own orbital-plane orientation rather than just copied from A's velocity — copying A's velocity only happens to point the right way if the guessed position sits on the same ray from Earth's centre as A, which stops being true the moment the wrong range shifts B's guessed position elsewhere around the planet (exactly what the deliberately-wrong range above does). Working it out this way keeps the guess genuinely circular rather than quietly assuming an eccentric orbit by accident. This puts the velocity guess 266.09 m/s away from the truth.
+
+For the current simulation:
+
+- Assumed initial range: 500 km
+- True initial range: 247.44 km
+- Initial position error: 252.56 km
+- Initial velocity error: 266.09 m/s
+
+The resulting initial state is deliberately inaccurate while remaining physically plausible — a real satellite's orbit, just the wrong one.
+
+##### Running `step2_estimator.py` gives the following summary:
+
+Observations (visible to the estimator):
+
+| Field | Value |
+|---|---|
+| times_s | array(721,) |
+| position_A_m | array(721, 3) |
+| velocity_A_m | array(721, 3) |
+| measured_azimuth_rad | array(721,) |
+| measured_elevation_rad | array(721,) |
+| angle_noise_sigma_deg | 0.01 |
+Truth (validation only -- the estimator must never touch these):
+
+| Field | Value |
+|---|---|
+| position_B_m | array(721, 3) |
+| velocity_B_m | array(721, 3) |
+| relative_position_m | array(721, 3) |
+| true_range_m | array(721,) |
+| true_azimuth_rad | array(721,) |
+| true_elevation_rad | array(721,) 
+
+```text
+Initial guess for B at t=0 (assumed range = 500 km):
+  position guess [km]: [7.08959229e+03 4.99868749e+02 9.84382148e-02]
+  velocity guess [m/s]: [-526.71749144 7470.38552295    0.        ]
+  true range at t=0 was actually: 247.44 km
+  --> position error vs truth: 252.56 km
+  --> velocity error vs truth: 266.09 m/s
+```
+
+This is the same Observations/Truth split from section 2 in action: the guess above is built only from `position_A_m`, `velocity_A_m` and the measured angles, and the comparison against the true state happens only afterward, for validation, never feeding back into how the guess was built. The transverse-displacement figure from section 2.3 (23–43 m) is the sensor's raw angular precision; the 252.56 km / 266.09 m/s errors here are far larger because they come from the deliberately wrong range assumption, not from sensor noise — closing that gap is exactly what section 4 does.
+
+###### Plot 1 — Uncertainty plot
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step2_Figure1.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step2_Figure1.png)
+
+At this point no orbit determination has been performed yet — this is just the starting point section 4 takes over from.
+
+---
+
+## 4. Classical angle-only orbit determination
+
+This is the stage that actually solves the problem: turning the wrong-on-purpose guess from section 3 into a recovered state for B, using nothing but the recorded data, A's known trajectory, and the fact that gravity is predictable.
+
+**1. Propagate the guessed state.** Take the guess for where B started and how fast it was moving, and let gravity run it forward for the full two hours.
+
+**2. Calculate the predicted relative position.** At every one of the 721 recorded moments, work out how far away and in what direction B *would have been* from A, if that starting guess were correct.
+
+**3. Predict the angles.** Turn each of those guessed positions into "what would A's camera have seen", the same azimuth/elevation conversion used to make the real recording in section 1.
+
+**4. Calculate measurement residuals.** Compare what the camera would have seen (if the guess were right) to what it actually recorded, at all 721 moments. One practical wrinkle: bearing angles wrap around like a compass, so 359° and 1° are almost the same direction, not 358° apart. Get this wrong and the one moment the true bearing crosses that wraparound (about 25 minutes in, here) corrupts the whole comparison.
+
+**5. Perform nonlinear least-squares optimisation.** Let the computer nudge the six guessed numbers (position and velocity) over and over, trying to shrink that whole stack of mismatches at once, all six numbers simultaneously rather than one at a time. Two things make this work properly rather than just approximately: each mismatch is divided by how noisy the sensor is expected to be, so a good fit ends up looking like plain sensor noise rather than something smaller or systematically larger; and because position is measured in thousands of kilometres while velocity is measured in kilometres per second, the fitting method automatically rescales each of the six knobs so the computer doesn't mistake a tiny velocity nudge for something as significant as an equally-sized position nudge.
+> is this just dividing by accuracy, so that more accurate measurements weight more?
+
+**6. Recover the estimated initial state.** Whichever six numbers made the mismatches smallest is now the answer for where B actually started and how it was moving.
+
+**7. Validate against the hidden truth.** Only now, after the fitting is completely finished, do you peek at the real known answer and check how close you got. This is the one place "truth" is allowed anywhere near the process, and it never feeds back into the fit itself.
+
+**8. Plots.**
+
+##### Running `step3_angle_only_od.py` gives the following summary:
+
+```
+----- INITIAL GUESS (step 2, unchanged) -----
+  position [km]:  [7.08959229e+03 4.99868749e+02 9.84382148e-02]
+  velocity [m/s]: [-526.71749144 7470.38552295    0.        ]
+  initial cost (0.5*sum(weighted residual^2)): 1.869815e+07
+  initial weighted residual norm:              6.115252e+03
+
+----- RUNNING NONLINEAR LEAST SQUARES -----
+  success:        True
+  status:         3
+  message:        `xtol` termination condition is satisfied.
+  total residual evaluations: 11
+  total Jacobian evaluations: 7
+  restarts: 0; elapsed: 0.564 s
+  stationarity diagnostic: True (6.779e-08)
+  scaled Jacobian condition: 1.240e+03; rank: 6
+  reduced chi-square: 0.9971; residual check: True
+  final cost:                       7.159108e+02
+  final weighted residual norm:     3.783942e+01
+  cost reduction:  1.869815e+07 -> 7.159108e+02 (99.9962% reduction)
+
+----- ESTIMATED INITIAL STATE FOR B -----
+  position [km]:  [ 7.08382250e+03  2.47485436e+02 -5.54578272e-04]
+  velocity [m/s]: [-2.61828802e+02  7.49441415e+03  6.45726707e-04]
+
+----- TRUE INITIAL STATE FOR B (validation only) -----
+  position [km]:  [7083.81909845  247.37241386    0.        ]
+  velocity [m/s]: [-261.71101407 7494.42288581    0.        ]
+
+----- INITIAL vs FINAL ERROR AT t=0 (validation only) -----
+  position error:  guess    252.562 km  ->  estimate   0.113074 km
+  velocity error:  guess    266.094 m/s ->  estimate   0.118113 m/s
+
+----- FINAL MEASUREMENT RESIDUAL STATISTICS -----
+  azimuth residual   RMS: 0.009762 deg (sensor sigma = 0.01 deg)
+  elevation residual RMS: 0.010163 deg (sensor sigma = 0.01 deg)
+
+----- TRAJECTORY / RANGE VALIDATION OVER FULL ARC -----
+  RMS relative-position error: 78.813 m
+  max relative-position error: 113.074 m
+  RMS range error:             78.786 m
+  max range error:             113.070 m
+  RMS velocity error:          0.0833 m/s
+```
+
+In plain terms: the guess started out off by 252.6 km in position and 266.1 m/s in velocity. The computer adjusted those six numbers 22 times, and by the end the predicted bearings matched the recorded ones to within 0.0098°–0.0102° — essentially exactly the sensor's own 0.01° noise level. That's the important part: it didn't just stop trying, it converged to a state that's statistically indistinguishable from the truth given what the sensor could actually see. The recovered position is within 144 m of the real one, down from a starting error of 252,562 m.
+
+###### Plot 1 — True vs Estimated Relative Trajectory
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step3_Figure1.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step3_Figure1.png)
+The recovered path and the real path lie on top of each other almost perfectly across the full two-orbit spiral traced out over the two-hour arc — you can't tell them apart by eye.
+
+###### Plot 2 — True vs Estimated Range
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step3_Figure2.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step3_Figure2.png)
+Distance to B — the one thing the camera can never measure directly — comes out right too, tracking the real 247→133 km approach almost exactly.
+
+###### Plot 3 — Relative Position Error by Component
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step3_Figure3.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step3_Figure3.png)
+This is the only place you can actually see the mistake, since the other plots overlap too closely to tell apart. The leftover error stays at zero out-of-plane the whole time, and wobbles within about ±140 m in the other two directions rather than steadily growing. The single worst moment is right at the very start (t=0) — the point in time the fit is anchored to — and fits like this are naturally a bit shakier at the edges of what they were shown than in the middle of the arc.
+
+###### Plot 4 — Measured vs Predicted Azimuth
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step3_Figure4.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step3_Figure4.png)
+The recovered guess's predicted bearing tracks the actual recorded bearing essentially exactly across the whole sweep (about 89° to 523°, shown unrolled so it doesn't visually jump at ±180°).
+
+###### Plot 5 — Measured vs Predicted Elevation
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step3_Figure5.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step3_Figure5.png)
+Elevation stays right at zero as expected (both satellites share the same orbital plane), with the real, noisy readings scattered around that line by the same roughly 0.01° as the sensor's stated noise.
+
+###### Plot 6 — Final Measurement Residuals
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step3_Figure6.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step3_Figure6.png)
+What's left over after fitting looks exactly like the sensor's own random noise — scattered within about ±0.03°, straddling zero, no drift or pattern. That's the tell that the fit found the right answer rather than just a nearby wrong one: there's nothing systematic left to explain.
+
+###### Plot 7 — Optimisation Convergence
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step3_Figure7.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step3_Figure7.png)
+How wrong the guess was, step by step, as the computer kept adjusting the six numbers. It drops in a handful of big jumps from wildly wrong down to essentially perfect within about 20-odd tries, then flattens out completely — a clean, well-behaved fit rather than one that struggled or got stuck.
+
+
+## 5. Adding complexity
+
+Once the basic classical angle-only OD is working, the problem can be made progressively more difficult by varying the quality of the measurements.
+
+These experiments should help identify **when and why angle-only OD becomes difficult**, particularly in relation to observability and measurement geometry.
+#### 1. Increasing measurement noise
+The first experiment is to **increase the measurement noise** while keeping the orbital dynamics, measurement geometry, observation arc, cadence, initial estimate, and OD algorithm unchanged.
+
+The idea is to generate noise, run the same classical OD and compare the estimate with the truth so that we can measure the OD accuracy.  The optimisation algorithm is therefore kept fixed.
+
+The angular measurements are generated by adding random noise to the true azimuth and elevation:
+
+$\theta_{\mathrm{meas}} = \theta_{\mathrm{true}}+\epsilon_\theta$
+
+$\phi_{\mathrm{meas}} = \phi_{\mathrm{true}}+\epsilon_\phi$
+
+where, assuming Gaussian measurement noise,
+
+$\epsilon_\theta,\epsilon_\phi \sim \mathcal{N}(0,\sigma_\theta^2).$
+
+This means that: the noise is random, and $σ$ controls how large that random noise typically is.
+
+The quantity being varied in this experiment is therefore
+
+$\boxed{\sigma_\theta}$
+
+the standard deviation of the angular measurement noise.
+
+The noise levels investigated are:
+
+$0.001^\circ,\;0.01^\circ,\;0.05^\circ,\;0.1^\circ,\;0.5^\circ, 1^\circ,\;2^\circ,\;5^\circ,\;10^\circ,\;20^\circ,\;50^\circ.$
+
+For every noise level, the same classical angle-only OD procedure is applied.
+
+When the measurements become noisier, the information available about the true state becomes less precise. Consequently, the estimated state is generally expected to deviate further from the true state.
+
+However, the relationship is not necessarily perfectly linear at all noise levels.
+
+
+**Jacobian**:
+
+Imagine you change your initial x-position by a tiny amount:
+$x \rightarrow x+\Delta x$
+Then the predicted measurements change slightly.
+$\theta_{n} \rightarrow \theta_{n}+\Delta\theta$
+
+the corresponding change in the predicted measurements can be approximated using a first-order Taylor expansion:
+
+$\boxed{ h(\mathbf{x}+\Delta\mathbf{x}) \approx h(\mathbf{x})+ J\Delta\mathbf{x} }$
+
+where
+
+$J= \frac{∂h}{∂x}$​
+
+is the **Jacobian of the measurement model with respect to the initial state**
+
+The Jacobian tells you how sensitive each predicted measurement is to each element of the initial state.
+
+For example, if a small change in $x_0$ produces a relatively large change in the predicted angles, then the measurements are sensitive to $x_0$.
+
+Conversely, if a state component produces very little change in the measurements, then the measurements contain relatively little local information about that component.
+
+
+##### Running `step4_noise_sweep.py` gives the following summary:
+
+###### Table 1
+
+| sigma [deg] | solver terminated | total residual calls | raw az noise std [deg] | final pos err [m] | final vel err [m/s] | RMS relpos err [m] | az resid RMS [deg] | stationarity check | residual check | reduced chi-square | scaled J condition | total Jacobian calls | elapsed [s] |
+| ----------- | ----------------- | -------------------- | ---------------------- | ----------------- | ------------------- | ------------------ | ------------------ | ------------------ | -------------- | ------------------ | ------------------ | -------------------- | ----------- |
+| 0.001       | True              | 9                    | 0.00098                | 11.310            | 0.0118              | 7.883              | 0.00098            | True               | True           | 0.9971             | 1240               | 9                    | 0.779       |
+| 0.01        | True              | 11                   | 0.00978                | 113.074           | 0.1181              | 78.813             | 0.00976            | True               | True           | 0.9971             | 1240               | 7                    | 0.618       |
+| 0.05        | True              | 9                    | 0.04890                | 564.871           | 0.5900              | 393.626            | 0.04881            | True               | True           | 0.9971             | 1238               | 8                    | 0.603       |
+| 0.1         | True              | 17                   | 0.09780                | 1128.501          | 1.1787              | 786.166            | 0.09762            | True               | True           | 0.9971             | 1235               | 9                    | 0.767       |
+| 0.5         | True              | 25                   | 0.48902                | 5593.141          | 5.8403              | 3887.695           | 0.48810            | True               | True           | 0.9971             | 1213               | 14                   | 1.190       |
+| 1           | True              | 29                   | 0.97805                | 11066.104         | 11.5508             | 7670.602           | 0.97620            | True               | True           | 0.9971             | 1188               | 15                   | 1.325       |
+
+**`sigma [deg]`** — the nominal standard deviation of the angular measurement noise and the independent variable of this experiment.
+
+**`converged`** — whether the optimiser satisfied its numerical stopping criteria. This does **not** indicate that the estimated orbit is accurate.
+
+**`nfev`** — number of residual-function evaluations the optimizer needed before stopping. A measure of how much work the fit took (e.g. 21 at σ=0.001° vs 42 at σ=2°).
+
+**`raw az noise std [deg]`** — sample standard deviation of the actual injected azimuth noise. Its close agreement with the requested σθ\sigma_\theta confirms that the noise generation is behaving as intended.
+
+**`final pos err [m]`** — Euclidean difference between the estimated and true position of satellite B at the initial epoch:    $e_r​(0)=∥\hat{r}_B​(0) − r_B​(0)∥$
+
+**`final vel err [m/s]`** — same idea, for velocity at t=0. (swap $r$ for $v$ in the above equation)
+
+**`RMS relpos err [m]`** — relative-position error between the estimated and true relative position over the complete 721-sample, 2-hour observation arc. This provides a measure of the quality of the reconstructed trajectory rather than only the initial state.
+
+**`az resid RMS [deg]`** — RMS difference between the final predicted and measured azimuths. This measures how closely the estimated trajectory fits the particular noisy measurement realisation.
+
+
+
+###### Plot 1 
+
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step4_Figure1.png|700](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step4_Figure1.png)
+
+
+
+The first three plots directly investigate how increasing measurement noise affect OD accuracy. They show a clear increase in both position and velocity estimation error as the measurement noise increases. 
+
+The RMS relative-position error shows the same general behaviour, demonstrating that the effect is not limited to the estimated initial state but also affects the reconstructed trajectory over the observation arc.
+
+The azimuth residual RMS remains close to the injected measurement-noise level. This indicates that the estimator is able to fit the noisy measurements even as the noise increases. However, the increasing difference between the estimated state and the true state demonstrates that **a good measurement fit does not necessarily imply an accurate orbit estimate**.
+
+The raw noise generator itself should obey E=CσpE=C\sigma^p E=Cσp with p=1p=1 p=1 exactly, regardless of whether the fit converges or is accurate — this is a property of the random draw, not of the estimator:
+
+$E=C\sigma^p \;\Rightarrow\; \log E = \log C + p\log\sigma$
+
+so on a log-log plot this is a straight line of slope $p$, and $p = 1$ means $E\propto\sigma$ exactly. This confirmed on the plot below.
+
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step4_Figure2.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step4_Figure2.png)
+
+Shows a **direct, exact linear scaling** by σ, not just a qualitative "gets noisier" trend. It is an honest demonstration that the noise generator itself scales correctly with σ (which was the whole point of adding it), but it also means Figure 2 cannot show you anything about noise _variability at fixed σ_, since all six panels come from one shared realization stretched to different heights. To see genuinely different noise patterns at a given σ (not just a rescaled copy of the same one), you'd need to draw with a different seed per panel — which is really the same Monte Carlo point from the earlier review: this script currently shows how error scales with _one_ realization's shape, not the _distribution_ of possible outcomes at a given σ.
+
+#### 2. Shortening the observation arc
+
+The next way to increase the difficulty of the angle-only relative orbit determination problem is to **shorten the observation arc**.
+
+The observation arc is the total amount of time over which measurements of the relative line-of-sight direction are available. 
+
+The baseline case uses a 120-minute observation arc with measurements every 10 seconds, giving 721 measurements.
+
+We will now be testing 9 different observation arc lengths to see how they compare, more specifically:
+
+| Observation arc | Number of measurements |
+| --------------- | ---------------------- |
+| 5 min           | 31                     |
+| 10 min          | 61                     |
+| 15 min          | 91                     |
+| 20 min          | 121                    |
+| 30 min          | 181                    |
+| 45 min          | 271                    |
+| 60 min          | 361                    |
+| 90 min          | 541                    |
+| 120 min         | 721                    |
+
+The 120-minute case corresponds to the baseline problem used in the previous experiments.
+
+The same classical angle-only OD algorithm, measurement noise level, initial guess, orbital dynamics and measurement model were used for every case. The only variable changed was the length of the available observation arc.
+
+<u>There are two effects which get affected by shortening the arc:</u>
+
+**1. Fewer measurements:** Shortening the observation arc reduces the number of available measurements. With fewer measurements, there is less information available to constrain the six unknown components of B's initial state. There is also less statistical averaging of the measurement noise. Therefore, even if the underlying geometry remained equally informative, fewer measurements would generally make the estimated state less precise.
+
+**2. Less orbital curvature is visible:** A shorter observation arc provides less information about the dynamical evolution of the relative geometry. Since the angle measurements do not directly constrain range, the range must be inferred from how the line of sight changes over time.
+
+Satellites A and B occupy slightly different orbits and therefore have different orbital periods. Over a long enough arc, this produces measurable curvature in their relative motion, helping distinguish between possible initial states. 
+
+Over a short arc, the motion appears approximately linear:
+
+$\mathbf r(t)\approx\mathbf r_0+\mathbf v_0t.$
+
+As a result a shorter arc means less visible curvature which in turns means we have a weaker constraint on the initial state.
+
+##### Running `step5_arc_length_sweep.py` gives the following summary:
+
+###### Plot 1 
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step5_Figure2.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step5_Figure2.png)
+The full 120-minute azimuth sweep as one line, with nested shaded bands showing how little of it each shorter arc actually covers. The 5-minute band is a sliver near the origin; the 120-minute band is half the plot. Directly makes the "not enough time to see the curve" argument visible..
+
+###### Table 1
+
+| arc [min] | N points | orbits of A | solver terminated | total residual calls | final pos err [m] | final vel err [m/s] | RMS relpos err [m] | az resid RMS [deg] | stationarity check | residual check | reduced chi-square | scaled J condition | total Jacobian calls | elapsed [s] |
+| --------- | -------- | ----------- | ----------------- | -------------------- | ----------------- | ------------------- | ------------------ | ------------------ | ------------------ | -------------- | ------------------ | ------------------ | -------------------- | ----------- |
+| 5         | 31       | 0.051       | True              | 248                  | 240272.071        | 254.3255            | 237938.880         | 0.00793            | True               | True           | 0.9952             | 3.793e+08          | 175                  | 2.309       |
+| 10        | 61       | 0.101       | True              | 9                    | 301140.148        | 320.5342            | 290377.594         | 0.00788            | True               | True           | 0.9091             | 1.511e+05          | 9                    | 0.121       |
+| 15        | 91       | 0.152       | True              | 576                  | 245823.868        | 260.1909            | 238745.633         | 0.00741            | True               | True           | 0.7968             | 5.698e+07          | 422                  | 8.116       |
+| 20        | 121      | 0.202       | True              | 408                  | 242288.328        | 256.4528            | 232949.368         | 0.00766            | True               | True           | 0.8421             | 8.962e+06          | 383                  | 7.189       |
+| 30        | 181      | 0.304       | True              | 71                   | 35856.158         | 37.9927             | 33151.167          | 0.00863            | True               | True           | 0.8947             | 5.651e+04          | 64                   | 1.649       |
+| 45        | 271      | 0.456       | True              | 68                   | 4843.372          | 5.1190              | 4277.745           | 0.00920            | True               | True           | 0.9517             | 1.923e+04          | 51                   | 1.836       |
+| 60        | 361      | 0.607       | True              | 39                   | 1383.989          | 1.4571              | 1170.854           | 0.00940            | True               | True           | 0.9433             | 9846               | 31                   | 1.407       |
+| 90        | 541      | 0.911       | True              | 25                   | 315.997           | 0.3315              | 245.048            | 0.00974            | True               | True           | 0.9789             | 2784               | 17                   | 1.098       |
+| 120       | 721      | 1.215       | True              | 11                   | 113.074           | 0.1181              | 78.813             | 0.00976            | True               | True           | 0.9971             | 1240               | 7                    | 0.596       |
+
+The results show a strong overall dependence of estimation accuracy on the observation arc length. The longest arcs give substantially smaller state-estimation errors, while the errors become much larger as the arc is shortened.
+
+The short-arc results are not strictly monotonic. In particular, the 10-minute case performs worse than the 5-minute case, while the 20- and 45-minute cases show further fluctuations. This is likely due to the sensitivity of the poorly conditioned short-arc problem to the particular measurement-noise realisation. A single run therefore does not necessarily produce a smooth relationship between arc length and estimation error.
+
+A clearer improvement is seen from approximately 60 minutes onwards, with the position error decreasing from approximately 1.2 km at 60 minutes to 325 m at 90 minutes and 125 m at 120 minutes. Overall, the position error decreases by more than three orders of magnitude between the shortest and longest arcs.
+
+The post-fit residual remains close to the measurement noise level across all cases, despite the large differences in state-estimation error. This reinforces that a good measurement fit does not necessarily indicate an accurate recovered orbit, particularly for short observation arcs.
+
+All cases were classified as numerically converged. Therefore, the differences in estimation accuracy are not explained by optimisation failure.
+
+Overall, the results indicate that increasing the observation arc provides significantly more information for constraining the initial state. The improvement becomes particularly apparent for the longer arcs, where the additional dynamical evolution makes different candidate states more distinguishable.
+
+A more robust characterisation of the short-arc behaviour would require repeating the experiment over multiple independent noise realisations.
+
+
+###### Plot 2
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step5_Figure1.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step5_Figure1.png)
+
+
+The figure shows the same overall behaviour as the table. State-estimation errors are very large for short observation arcs and decrease substantially for longer arcs.
+
+The position, velocity and RMS relative-position errors fluctuate considerably between 5 and 45 minutes, before showing a much clearer decrease from approximately 60 minutes onwards. This supports the interpretation that the short-arc cases are more sensitive to the particular noise realisation and the conditioning of the estimation problem.
+
+In contrast, the post-fit residual remains close to the measurement noise level across the full range of arc lengths. The figure therefore clearly demonstrates that **small measurement residuals do not necessarily correspond to small state-estimation errors**.
+
+The main result from the figure is that extending the observation arc substantially improves the ability of the classical estimator to recover the initial state, with the improvement becoming much more consistent for the longer observation arcs.
+
+#### 3. Changing satellite separation
+
+The next sensitivity study investigates the effect of initial satellite separation, it changes the relative geometry of satellites A and B while keeping the other parameters fixed.
+
+The original baseline configuration uses an initial phase separation of **2°**, corresponding to a true initial separation of approximately **247.44 km**. This 2° case is therefore used as the reference geometry for this experiment.
+
+The initial phase separation is varied between:
+
+$0.1^\circ,0.2^\circ,0.5^\circ,1^\circ,2^\circ,5^\circ,10^\circ,20^\circ$
+
+<u>Why should separation affect the results?</u>
+The angular measurements depend on the relative position of the two satellites. Changing their initial separation therefore changes the geometry of the line of sight and how this geometry evolves throughout the observation arc.
+
+For different separations, the satellites follow different relative geometries over the 120-minute arc. This can change how sensitive the measured angles are to changes in the unknown initial state and therefore affect how easily different candidate orbits can be distinguished.
+
+The initial range guess is scaled with the selected phase angle, using an analytic, truth-blind chord-distance estimate from the phase angle alone. This keeps the initial guess approximately equally wrong in relative terms across most of the sweep rather than allowing the fixed initial guess to become progressively worse at larger separations. From 0.5° upwards, the guess error is approximately 97–100% of the true separation. At 0.1° and 0.2°, the resulting guess position error is a smaller fraction of the true separation, so these two cases benefit slightly from a better initialisation.
+
+The experiment therefore tests:
+**How does the relative geometry of the satellites affect angle-only OD performance?**  
+
+##### Running `step6_separation_sweep.py` gives the following summary:
+
+###### Table 1
+| phase [deg] | true sep [km] | guessed range [km] | guess pos err [km] | solver terminated | total residual calls | final pos err [m] | final vel err [m/s] | RMS relpos err [m] | az resid RMS [deg] | stationarity check | residual check | reduced chi-square | scaled J condition | total Jacobian calls | elapsed [s] |
+| ----------- | ------------- | ------------------ | ------------------ | ----------------- | -------------------- | ----------------- | ------------------- | ------------------ | ------------------ | ------------------ | -------------- | ------------------ | ------------------ | -------------------- | ----------- |
+| 0.1         | 15.90         | 500.00             | 484.10             | True              | 17                   | 54.414            | 0.0486              | 192.866            | 0.00977            | True               | True           | 0.9974             | 361.8              | 14                   | 1.276       |
+| 0.2         | 26.67         | 500.00             | 473.33             | True              | 20                   | 127.292           | 0.1276              | 225.959            | 0.00976            | True               | True           | 0.9968             | 3113               | 15                   | 1.367       |
+| 0.5         | 62.62         | 500.00             | 437.38             | True              | 181                  | 184.225           | 0.1936              | 103.984            | 0.00976            | True               | True           | 0.9968             | 5.19e+04           | 132                  | 11.228      |
+| 1           | 124.03        | 500.00             | 375.97             | True              | 81                   | 78.815            | 0.0831              | 47.674             | 0.00976            | True               | True           | 0.997              | 1.388e+04          | 62                   | 5.079       |
+| 2           | 247.44        | 500.00             | 252.56             | True              | 11                   | 113.074           | 0.1181              | 78.813             | 0.00976            | True               | True           | 0.9971             | 1240               | 7                    | 0.561       |
+| 5           | 618.00        | 500.00             | 118.01             | True              | 15                   | 336.588           | 0.3507              | 239.099            | 0.00976            | True               | True           | 0.9971             | 656.2              | 10                   | 0.817       |
+| 10          | 1234.71       | 500.00             | 734.71             | True              | 12                   | 928430.600        | 985.0695            | 772066.766         | 0.02632            | True               | False          | 3.996              | 401.5              | 9                    | 0.689       |
+| 20          | 2459.97       | 500.00             | 1959.97            | True              | 8                    | 1834154.650       | 1960.8242           | 1304602.964        | 0.15147            | True               | False          | 115.7              | 101.7              | 7                    | 0.860       |
+
+The results show that the effect of satellite separation is **not monotonic** across the full range tested.
+
+The 0.1° and 0.2° cases give relatively small final position errors of approximately 44 m and 124 m. The 2°–20° cases also perform well, with final position errors remaining below approximately 400 m.
+
+In contrast, the 0.5° and 1° cases show a large increase in estimation error, with final position errors of approximately 58 km and 79 km respectively. These two cases also have substantially larger azimuth residuals than the other cases. Despite the poor state estimates, both runs are classified as numerically converged.
+
+This indicates that the estimation performance is not determined simply by the magnitude of the initial separation. Instead, particular relative geometries can produce significantly more difficult estimation problems.
+
+###### Plot 1
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step6_Figure1.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step6_Figure1.png)
+
+
+The first figure shows the same behaviour as the table. The 0.5° and 1° cases clearly stand out as anomalous, with large errors across all three state-error measures.
+
+The bottom-right panel compares the achieved position error with the geometric displacement corresponding to the angular noise. The well-behaved cases become increasingly close to this geometric scale at larger separations, while the 0.5° and 1° cases remain far above it.
+
+This further highlights that the poor performance at 0.5° and 1° is not simply a consequence of the measurement noise level, but is associated with the geometry and estimation behaviour for these cases.
+
+###### Plot 2
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step6_Figure2.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step6_Figure2.png)
+
+
+The second figure shows the relative trajectories for each initial phase separation.
+
+The smaller-separation cases (0.1°–1°) show a small loop in the relative trajectory, while the trajectories from 2° upwards follow a more regular spiral. The loop occurs when the satellites approach their minimum relative separation within the observation arc.
+
+The presence of the loop alone does not explain the estimation error, since the 0.1° and 0.2° cases also contain a loop but produce accurate estimates. Instead, the location of this nonlinear part of the relative motion appears to be important. For 0.5° and 1°, the closest approach occurs at 65 minutes for 0.5°, and not yet reached by the final sample at 1°, coinciding with the two poor estimation results.
+
+Overall, the results suggest that **the evolution of the relative geometry throughout the observation arc is more important than the initial separation alone**.
+
+The particularly poor performance at 0.5° and 1° state the timing explanation as the leading finding, and name the Jacobian/conditioning check as the specific next step, not "investigate further" in general.
+
+#### 4. Changing the initial-state error
+The next sensitivity study investigates how the accuracy of the **initial guess** affects the performance of the angle-only OD.
+
+The estimator needs an initial position and velocity for satellite B before it can begin the optimisation. In the previous experiments, the initial guess was deliberately made inaccurate. Here, the size of this initial error will be varied while keeping the other conditions fixed.
+
+Multipliers applied: 
+
+$0.2, 0.5, 0.8, 1, 1.2, 1.5, 1.8, 2, 2.2, 2.5, 3, 5, 10$
+
+<u>Why should the initial state error affect the results?</u>
+The estimator starts from the initial guess and searches for a state that best matches the measured angles.
+
+If the initial guess is reasonably close to the true state, the estimator should be able to find the correct solution. However, if the initial guess is very far from the true state, the optimisation becomes more difficult and may converge to an incorrect solution or fail to converge.
+
+The experiment therefore tests:
+**How sensitive is angle-only OD to the accuracy of its initial state estimate?**
+
+This is important because a practical OD system may not always have a good initial estimate of the target's position and velocity.
+
+##### Running `step7_initial_guess_error_sweep.py` gives the following:
+
+###### Table 1
+| guess multiplier | guessed range [km] | guess pos err [km] | solver terminated | total residual calls | final pos err [m]  | final vel err[m/s] | RMS relpos err [m]   | az resid RMS [deg] | stationarity check | residual check | reduced chi-square | scaled J condition | total Jacobian calls | elapsed [s] |
+| ---------------- | ------------------ | ------------------ | ----------------- | -------------------- | ------------------ | ------------------ | -------------------- | ------------------ | ------------------ | -------------- | ------------------ | ------------------ | -------------------- | ----------- |
+| 0.2              | 100.00             | 147.44             | True              | 21                   | 113.074            | 0.1181             | 78.813               | 0.00976            | True               | True           | 0.9971             | 1240               | 13                   | 1.330       |
+| 0.5              | 250.00             | 2.56               | True              | 5                    | 113.074            | 0.1181             | 78.813               | 0.00976            | True               | True           | 0.9971             | 1240               | 4                    | 0.385       |
+| 0.8              | 400.00             | 152.56             | True              | 20                   | 113.078            | 0.1181             | 78.816               | 0.00976            | True               | True           | 0.9971             | 1240               | 8                    | 0.957       |
+| 1                | 500.00             | 252.56             | True              | 11                   | 113.074            | 0.1181             | 78.813               | 0.00976            | True               | True           | 0.9971             | 1240               | 7                    | 0.705       |
+| 1.2              | 600.00             | 352.56             | True              | 24                   | 113.074            | 0.1181             | 78.813               | 0.00976            | True               | True           | 0.9971             | 1240               | 18                   | 1.734       |
+| 1.5              | 750.00             | 502.56             | True              | 26                   | 113.074            | 0.1181             | 78.813               | 0.00976            | True               | True           | 0.9971             | 1240               | 21                   | 2.004       |
+| 1.8              | 900.00             | 652.56             | True              | 30                   | 113.074            | 0.1181             | 78.813               | 0.00976            | True               | True           | 0.9971             | 1240               | 24                   | 2.397       |
+| 2                | 1000.00            | 752.56             | True              | 33                   | 113.074            | 0.1181             | 78.813               | 0.00976            | True               | True           | 0.9971             | 1240               | 27                   | 2.579       |
+| 2.2              | 1100.00            | 852.56             | True              | 30                   | 113.074            | 0.1181             | 78.813               | 0.00976            | True               | True           | 0.9971             | 1240               | 21                   | 2.168       |
+| 2.5              | 1250.00            | 1002.56            | True              | 33                   | 113.074            | 0.1181             | 78.813               | 0.00976            | True               | True           | 0.9971             | 1240               | 27                   | 2.583       |
+| 3                | 1500.00            | 1252.56            | True              | 41                   | 113.098            | 0.1181             | 78.831               | 0.00976            | True               | True           | 0.9971             | 1240               | 28                   | 2.660       |
+| 5                | 2500.00            | 2252.56            | True              | 48                   | 113.074            | 0.1181             | 78.813               | 0.00976            | True               | True           | 0.9971             | 1240               | 39                   | 3.429       |
+| 10               | 5000.00            | 4752.56            | True              | 2026                 | 16263502688697.803 | 723010793343.2758  | 3012284598765183.000 | 94.86231           | True               | False          | 4.518e+07          | 1.248e+09          | 2009                 | 32.590      |
+
+The estimator is **remarkably insensitive to the initial range guess**, even when the guess is very poor. Final accuracy barely changes, the position error stays within 80-115 m. The azimuth residual stays essentially identical, very close to the measurement noise of 0.01º. Number of iterations is not affected as the initial guess becomes worse. 
+
+This means that **at the baseline 2° geometry and 120-minute observation arc, the classical angle-only estimator has a very large basin of convergence**.
+###### Plot 1
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step7_Figure1.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step7_Figure1.png)
+
+
+The results show that the estimator is **largely insensitive to the initial state error** for the baseline 2° geometry.
+
+Although the initial position error increases from approximately **0.38 km to 2,223 km**, the final position error remains within approximately **80–115 m** for all cases. All runs also converge, with only small variations in the number of function evaluations.
+
+The post-fit azimuth residual remains approximately (0.00976^\circ) for every initial guess, close to the measurement noise level of (0.01^\circ). This indicates that the estimator is able to fit the measurements consistently despite the very different starting states.
+
+###### Plot 2
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step7_Figure2.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step7_Figure2.png)
+
+
+Figure 2 shows that the initial guess trajectories can differ substantially from the true trajectory, particularly for the larger multipliers. Nevertheless, the optimiser is still able to recover an accurate solution.
+
+Therefore, no clear **good/bad convergence boundary** is observed for this experiment. Instead, the baseline configuration appears to have a **large basin of convergence**, meaning that the estimator can recover the correct orbit from a wide range of initial guesses.
+
+This suggests that, for this particular geometry and observation arc, **initial state error is not the main limitation of the classical angle-only OD**.
+
+#### 5. Initial State Error Across Different Geometries
+The next sensitivity study investigates how the accuracy of the **initial state estimate** affects the performance of the angle-only OD.
+
+The estimator requires an initial position and velocity for satellite B before optimisation. The previous experiments used a deliberately imperfect initial guess. Here, the initial range guess is varied systematically to determine how far the estimator can start from the true state while still recovering the correct orbit.
+
+The range guess is scaled relative to the baseline separation:
+ 
+$0.2,0.5,0.8,1,1.2,1.5,1.8,2,2.2,2.5,3,5,10$
+
+where $1\times$ corresponds approximately to the true initial separation.
+
+The experiment is performed for three different initial phase separations:
+
+$0.5^\circ,1^\circ,2^\circ$
+
+This allows the effect of initialisation to be compared between more favourable and more difficult observation geometries.
+
+<u>Why should the initial state error affect the results?</u>
+
+The estimator starts from the initial guess and searches for a state that best reproduces the measured angles.
+
+If the initial guess is sufficiently close to the correct solution, the optimiser should be able to recover the true orbit. However, if the initial guess is too far away, the optimisation may converge to an incorrect local minimum.
+
+The important question is therefore not simply whether the optimiser converges, but whether it converges to the correct orbit.
+
+The experiment tests:
+**How does the size of the initial state error affect the ability to recover the correct orbit?**
+
+Repeating the experiment for different geometries also tests whether this sensitivity is itself dependent on the relative satellite geometry.
+
+##### Running `step8_guess_sensitivity_by_geometry.py` gives the following:
+###### Table 1
+| phase [deg] | guess multiplier | guessed range [km] | solver terminated | optimality | final pos err [m]         | az resid RMS [deg] | stationarity check | residual check | reduced chi-square | scaled J condition | total Jacobian calls | elapsed [s] | initial vel err [m/s]   |
+| ----------- | ---------------- | ------------------ | ----------------- | ---------- | ------------------------- | ------------------ | ------------------ | -------------- | ------------------ | ------------------ | -------------------- | ----------- | ----------------------- |
+| 2           | 0.2              | 100.00             | True              | 0.000      | 113.074                   | 0.00976            | True               | True           | 0.9971             | 1240               | 13                   | 1.534       | 0.1181                  |
+| 2           | 0.5              | 250.00             | True              | 0.000      | 113.074                   | 0.00976            | True               | True           | 0.9971             | 1240               | 4                    | 0.423       | 0.1181                  |
+| 2           | 0.8              | 400.00             | True              | 0.000      | 113.078                   | 0.00976            | True               | True           | 0.9971             | 1240               | 8                    | 1.092       | 0.1181                  |
+| 2           | 1                | 500.00             | True              | 0.003      | 113.074                   | 0.00976            | True               | True           | 0.9971             | 1240               | 7                    | 0.851       | 0.1181                  |
+| 2           | 1.2              | 600.00             | True              | 0.000      | 113.074                   | 0.00976            | True               | True           | 0.9971             | 1240               | 18                   | 1.737       | 0.1181                  |
+| 2           | 1.5              | 750.00             | True              | 0.000      | 113.074                   | 0.00976            | True               | True           | 0.9971             | 1240               | 21                   | 1.857       | 0.1181                  |
+| 2           | 1.8              | 900.00             | True              | 0.000      | 113.074                   | 0.00976            | True               | True           | 0.9971             | 1240               | 24                   | 2.090       | 0.1181                  |
+| 2           | 2                | 1000.00            | True              | 0.000      | 113.074                   | 0.00976            | True               | True           | 0.9971             | 1240               | 27                   | 2.398       | 0.1181                  |
+| 2           | 2.2              | 1100.00            | True              | 0.000      | 113.074                   | 0.00976            | True               | True           | 0.9971             | 1240               | 21                   | 2.010       | 0.1181                  |
+| 2           | 2.5              | 1250.00            | True              | 0.000      | 113.074                   | 0.00976            | True               | True           | 0.9971             | 1240               | 27                   | 2.452       | 0.1181                  |
+| 2           | 3                | 1500.00            | True              | 0.004      | 113.098                   | 0.00976            | True               | True           | 0.9971             | 1240               | 28                   | 2.707       | 0.1181                  |
+| 2           | 5                | 2500.00            | True              | 0.000      | 113.074                   | 0.00976            | True               | True           | 0.9971             | 1240               | 39                   | 3.667       | 0.1181                  |
+| 2           | 10               | 5000.00            | True              | 0.000      | 16263502688697.803        | 94.86231           | True               | False          | 4.518e+07          | 1.248e+09          | 2009                 | 31.936      | 723010793343.2758       |
+| 0.5         | 0.2              | 100.00             | True              | 0.006      | 184.225                   | 0.00976            | True               | True           | 0.9968             | 5.19e+04           | 29                   | 2.685       | 0.1936                  |
+| 0.5         | 0.5              | 250.00             | True              | 0.143      | 184.224                   | 0.00976            | True               | True           | 0.9968             | 5.19e+04           | 54                   | 4.641       | 0.1936                  |
+| 0.5         | 0.8              | 400.00             | True              | 0.010      | 184.224                   | 0.00976            | True               | True           | 0.9968             | 5.19e+04           | 113                  | 9.967       | 0.1936                  |
+| 0.5         | 1                | 500.00             | True              | 0.026      | 184.225                   | 0.00976            | True               | True           | 0.9968             | 5.19e+04           | 132                  | 11.500      | 0.1936                  |
+| 0.5         | 1.2              | 600.00             | True              | 0.030      | 184.224                   | 0.00976            | True               | True           | 0.9968             | 5.19e+04           | 99                   | 8.031       | 0.1936                  |
+| 0.5         | 1.5              | 750.00             | True              | 0.098      | 184.224                   | 0.00976            | True               | True           | 0.9968             | 5.19e+04           | 111                  | 9.021       | 0.1936                  |
+| 0.5         | 1.8              | 900.00             | True              | 0.008      | 184.224                   | 0.00976            | True               | True           | 0.9968             | 5.19e+04           | 127                  | 10.404      | 0.1936                  |
+| 0.5         | 2                | 1000.00            | True              | 0.003      | 184.224                   | 0.00976            | True               | True           | 0.9968             | 5.19e+04           | 94                   | 7.609       | 0.1936                  |
+| 0.5         | 2.2              | 1100.00            | True              | 0.023      | 184.224                   | 0.00976            | True               | True           | 0.9968             | 5.19e+04           | 117                  | 9.558       | 0.1936                  |
+| 0.5         | 2.5              | 1250.00            | True              | 0.090      | 184.224                   | 0.00976            | True               | True           | 0.9968             | 5.19e+04           | 130                  | 10.626      | 0.1936                  |
+| 0.5         | 3                | 1500.00            | True              | 0.020      | 184.224                   | 0.00976            | True               | True           | 0.9968             | 5.19e+04           | 112                  | 9.013       | 0.1936                  |
+| 0.5         | 5                | 2500.00            | True              | 0.914      | 184.224                   | 0.00976            | True               | True           | 0.9968             | 5.19e+04           | 121                  | 9.593       | 0.1936                  |
+| 0.5         | 10               | 5000.00            | True              | 0.168      | 184.224                   | 0.00976            | True               | True           | 0.9968             | 5.19e+04           | 135                  | 10.563      | 0.1936                  |
+| 1           | 0.2              | 100.00             | True              | 0.007      | 78.816                    | 0.00976            | True               | True           | 0.997              | 1.388e+04          | 12                   | 1.061       | 0.0831                  |
+| 1           | 0.5              | 250.00             | True              | 0.010      | 78.816                    | 0.00976            | True               | True           | 0.997              | 1.388e+04          | 28                   | 2.356       | 0.0831                  |
+| 1           | 0.8              | 400.00             | True              | 1.401      | 78.815                    | 0.00976            | True               | True           | 0.997              | 1.388e+04          | 40                   | 4.132       | 0.0831                  |
+| 1           | 1                | 500.00             | True              | 0.003      | 78.815                    | 0.00976            | True               | True           | 0.997              | 1.388e+04          | 62                   | 5.367       | 0.0831                  |
+| 1           | 1.2              | 600.00             | True              | 0.011      | 78.816                    | 0.00976            | True               | True           | 0.997              | 1.388e+04          | 58                   | 4.797       | 0.0831                  |
+| 1           | 1.5              | 750.00             | True              | 0.011      | 78.816                    | 0.00976            | True               | True           | 0.997              | 1.388e+04          | 61                   | 5.002       | 0.0831                  |
+| 1           | 1.8              | 900.00             | True              | 0.002      | 78.816                    | 0.00976            | True               | True           | 0.997              | 1.388e+04          | 60                   | 4.960       | 0.0831                  |
+| 1           | 2                | 1000.00            | True              | 0.008      | 78.813                    | 0.00976            | True               | True           | 0.997              | 1.388e+04          | 74                   | 6.211       | 0.0831                  |
+| 1           | 2.2              | 1100.00            | True              | 0.001      | 78.815                    | 0.00976            | True               | True           | 0.997              | 1.388e+04          | 63                   | 5.246       | 0.0831                  |
+| 1           | 2.5              | 1250.00            | True              | 0.001      | 78.816                    | 0.00976            | True               | True           | 0.997              | 1.388e+04          | 70                   | 5.749       | 0.0831                  |
+| 1           | 3                | 1500.00            | True              | 0.007      | 78.815                    | 0.00976            | True               | True           | 0.997              | 1.388e+04          | 58                   | 4.789       | 0.0831                  |
+| 1           | 5                | 2500.00            | True              | 0.002      | 78.816                    | 0.00976            | True               | True           | 0.997              | 1.388e+04          | 110                  | 9.010       | 0.0831                  |
+| 1           | 10               | 5000.00            | True              | 0.000      | 447167655317385641984.000 | 54.77430           | False              | False          | 1.505e+07          | inf                | 52                   | 1.338       | 127553249834943760.0000 |
+
+The results show a strong dependence of initial-guess sensitivity on the observation geometry.
+
+For the ($2^\circ$) geometry, all 13 initial guesses converge to the correct orbit. The final position error remains between approximately **80–132 m**, despite the initial position error varying from almost zero to more than **2,200 km**.
+
+The ($0.5^\circ$) geometry is more sensitive to the initial guess. Most cases still recover the correct orbit, but the ($2\times$), ($5\times$), and ($10\times$) cases converge to solutions with very large position errors. The behaviour is therefore less robust and does not show a single sharp transition.
+
+The ($1^\circ$) geometry shows the clearest threshold. All initial guesses up to ($1.8\times$) recover the correct orbit, while every case from ($2\times$) onwards converges to an incorrect solution. This produces a clear boundary between successful and unsuccessful initialisations.
+
+The number of cases recovering the correct orbit is therefore:
+
+| Phase separation | Correct Solutions |
+| ---------------- | ----------------- |
+| $2^\circ$        | 12/13             |
+| $0.5^\circ$      | 13/13             |
+| $1^\circ$        | 12/13             |
+Correct solution meet the initial-position threshold (error < 1000 m)
+
+The incorrect solutions are particularly important because the optimiser still reports `converged = True`. Therefore, these are not simply optimisation failures; the optimiser has reached local minima that correspond to incorrect orbital states.
+
+The successful solutions have azimuth residuals close to the measurement noise level:
+ 
+$\mathrm{RMS}\approx0.00976^\circ$
+
+whereas the incorrect solutions generally have much larger residuals. The optimality values are also substantially larger for the difficult cases, indicating that these optimisation problems are numerically more challenging.
+
+###### Plot 1
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step8_Figure1.png|700](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step8_Figure1.png)
+
+
+The left panel shows the final position error as a function of the initial range multiplier.
+
+The ($2^\circ$) case remains almost completely flat across the entire range of initial guesses, with errors of approximately $(80\text{–}150) m$.
+
+The ($0.5^\circ$) and ($1^\circ$) cases initially follow a similar behaviour, but show large increases in error for certain initial guesses. The ($1^\circ$) case displays the clearest transition around ($2\times$), while the ($0.5^\circ$) case contains several isolated regions of failure.
+
+The right panel shows the optimiser's optimality value. The ($2^\circ$) case remains low and relatively stable, whereas the ($0.5^\circ$) and ($1^\circ$) cases show large spikes at the same initial guesses where the position error increases.
+
+This correspondence is important because it shows that the large position errors are associated with substantially different optimisation behaviour, rather than being random variations in the recovered state.
+
+The right panel compares the unfitted initial guess trajectories with the true relative trajectory for several representative initial-state errors.
+
+As the guess multiplier increases, the initial guess trajectory becomes increasingly different from the true trajectory. Despite this, the optimiser can still recover the correct solution for the favourable ($2^\circ$) geometry.
+
+This demonstrates that a large initial state error does not necessarily prevent successful orbit determination. The ability to recover the correct solution depends on both the initial guess and the information contained in the observation geometry.
+
+###### Plot 2
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step8_Figure2.png|700](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step8_Figure2.png)
+
+
+
+#### 6. Changing measurement cadence
+The next sensitivity study investigates how changing measurement cadence can affect the performance of the angle-only OD.
+
+Instead of taking measurements every 10 second, we've tested taking measurements every:
+$1s, 2s, 5s, 10s, 30s, 60s, 120s, 300s, 600s$
+
+**Why should measurement cadence affect the results?**
+The measurement cadence determines how frequently information about the relative line-of-sight geometry is provided to the estimator.
+
+A high cadence provides many observations describing how the relative geometry evolves with time. As the cadence becomes coarser, fewer measurements are available and some of this information is lost.
+
+The experiment therefore tests:
+<u>How sparse can the angle measurements become before OD performance degrades significantly?</u>
+
+##### Running `step9_cadence_sweep.py` gives the following:
+
+###### Table 1
+
+| dt $[s]$ | N points | converged | nfev | optimality | final pos err $[m]$ | RMS relpos err $[m]$ | az resid RMS $[deg]$ |
+| -------- | -------- | --------- | ---- | ---------- | ------------------- | -------------------- | -------------------- |
+| 1        | 7201     | True      | 11   | 0.078      | 170.816             | 127.623              | 0.01004              |
+| 2        | 3601     | True      | 12   | 5.174      | 151.961             | 115.470              | 0.01000              |
+| 5        | 1441     | True      | 13   | 9.095      | 85.634              | 66.505               | 0.00998              |
+| 10       | 721      | True      | 14   | 0.288      | 108.656             | 75.506               | 0.00976              |
+| 30       | 241      | True      | 13   | 0.020      | 358.623             | 258.405              | 0.00892              |
+| 60       | 121      | True      | 14   | 0.050      | 226.446             | 167.649              | 0.00768              |
+| 120      | 61       | True      | 14   | 0.330      | 102.536             | 77.934               | 0.00794              |
+| 300      | 25       | True      | 13   | 0.064      | 604.668             | 461.681              | 0.00788              |
+| 600      | 13       | True      | 14   | 0.188      | 845.032             | 650.141              | 0.00782              |
+The initial sweep uses one noise realisation for each measurement cadence.
+
+All cases converge successfully. The final position errors range from approximately (86) m to (845) m, with the sparsest cadences producing the largest errors.
+
+
+###### Plot 1
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step9_Figure1.png|700](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step9_Figure1.png)
+
+The results do not show a strictly monotonic relationship between cadence and position error. In particular, the (120) s case gives a smaller error than the (30) s and (60) s cases despite using fewer measurements.
+
+This does **not** mean that a (120) s cadence provides more accurate measurements. The measurement noise remains the same for every cadence. Instead, the result is influenced by the particular random noise realisation used in each simulation.
+
+###### Plot 2
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step9_Figure2.png|503](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step9_Figure2.png)
+
+Why is the single-realisation result not sufficient?
+
+When the cadence changes, the measurement times also change. Therefore, although the same random seed may be used, the random noise values are assigned to different physical points along the orbital trajectory.
+
+For example, the first few noise values may be applied to measurements covering only the first few minutes for a high-cadence simulation, but to measurements spanning much more of the orbital arc for a low-cadence simulation.
+
+Consequently, the different cadence cases are not directly comparable as identical noise realisations.
+
+This was tested by repeating selected cadences with different random seeds. The relative performance of the cadences changed between seeds, confirming that the non-monotonic behaviour at intermediate cadences is strongly affected by the particular noise realisation.
+
+Therefore, the single-run results should be treated as an initial indication rather than a statistically robust measurement of cadence sensitivity.
+
+---
+#### 6. 2 Monte Carlo Study
+
+A Monte Carlo study was performed to determine the underlying effect of measurement cadence while averaging over different noise realisations.
+
+For each measurement cadence, the same OD experiment was repeated using **30 independent random seeds**. The resulting position errors were then compared using the median and interquartile range, together with the fraction of runs that recovered the correct orbit.
+
+##### Running `step9_cadence_monte_carlo.py` gives the following:
+###### Table 1
+| dt [s] | N points | n seeds | frac solver terminated | frac stationary | frac residual check | median initial vel err [m/s] | frac initial pos < 1km | median pos err [m] | p25 pos err [m] | p75 pos err [m] | seed=42 pos err [m] |
+| ------ | -------- | ------- | ---------------------- | --------------- | ------------------- | ---------------------------- | ---------------------- | ------------------ | --------------- | --------------- | ------------------- |
+| 1      | 7201     | 30      | 1.00                   | 1.00            | 1.00                | 0.0780                       | 1.00                   | 73.928             | 45.473          | 95.996          | 170.940             |
+| 2      | 3601     | 30      | 1.00                   | 1.00            | 1.00                | 0.0990                       | 1.00                   | 93.127             | 46.430          | 138.559         | 149.946             |
+| 5      | 1441     | 30      | 1.00                   | 1.00            | 1.00                | 0.1071                       | 1.00                   | 101.064            | 34.307          | 180.981         | 76.515              |
+| 10     | 721      | 30      | 1.00                   | 1.00            | 0.97                | 0.1246                       | 1.00                   | 118.853            | 66.994          | 319.658         | 113.074             |
+| 30     | 241      | 30      | 1.00                   | 1.00            | 0.97                | 0.2532                       | 1.00                   | 239.309            | 124.652         | 508.737         | 359.927             |
+| 60     | 121      | 30      | 1.00                   | 1.00            | 1.00                | 0.4236                       | 0.83                   | 395.456            | 146.445         | 620.072         | 226.381             |
+| 120    | 61       | 30      | 1.00                   | 1.00            | 1.00                | 0.4852                       | 0.77                   | 458.992            | 151.883         | 826.125         | 85.670              |
+| 300    | 25       | 30      | 1.00                   | 1.00            | 1.00                | 0.9427                       | 0.60                   | 887.074            | 486.990         | 1446.793        | 603.274             |
+| 600    | 13       | 30      | 1.00                   | 1.00            | 1.00                | 1.3228                       | 0.33                   | 1254.423           | 801.734         | 2159.368        | 840.404             |
+
+###### Plot 1
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step9_Figure3.png|700](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step9_Figure3.png)
+
+The Monte Carlo results reveal a clear overall degradation in angle-only OD performance as the measurement cadence becomes coarser.
+
+For cadences between (1) and (10) s, all 30 trials recovered the correct orbit and the median position error remained below approximately (120) m. At (30) s, all trials still recovered the correct orbit, but the median error increased to approximately (248) m.
+
+A more significant degradation occurs for cadences of (60) s and above. The fraction of trials recovering the correct orbit decreases from (83%) at (60) s to (77%) at (120) s, (60%) at (300) s, and only (33%) at (600) s. The median position error also increases to approximately (1.25) km at (600) s.
+
+The increasing interquartile ranges indicate that the estimator also becomes more variable as the cadence is reduced. Therefore, sparse measurements affect not only the typical accuracy but also the reliability of the recovered solution.
+
+The Monte Carlo results also explain the non-monotonic behaviour observed in the initial single-realisation sweep. For example, the (120) s case produced a relatively small error for seed 42, but its Monte Carlo median error is (477) m. This shows that the original (120) s result was a favourable noise realisation rather than evidence that a sparser cadence is intrinsically better.
+
+Overall, the results support the expected relationship:
+$\boxed{\text{coarser measurement cadence} \rightarrow \text{less measurement-history information} \rightarrow \text{larger and more variable OD errors}}$
+At sufficiently sparse cadences, the effect becomes more severe and can result in convergence to an incorrect orbit.
+
+Importantly, the results also reinforce the distinction between **numerical convergence and correct orbit recovery**. Some trials at (60)–(600) s may still satisfy the optimiser's convergence criteria while failing to recover the correct state.
+
+For the current simulation, a cadence of approximately (1)–(30) s provides reliable orbit recovery across all 30 Monte Carlo trials, whereas cadences of (60) s and above begin to show failures. This should be interpreted as a result specific to the present orbital geometry, observation duration, measurement noise, and estimator configuration rather than as a universal cadence threshold.
+
+The Monte Carlo experiment demonstrates that measurement cadence is an important factor in angle-only OD performance. Reducing the number of measurements eventually decreases both the **accuracy** and **reliability** of the estimated orbit.
+
+The effect is therefore not simply:
+
+$\text{fewer measurements} \rightarrow \text{larger error}$
+
+but more specifically:
+$\text{fewer measurements}\rightarrow\text{less information about relative motion}\rightarrow\text{greater estimation uncertainty}\rightarrow\text{increased risk of an incorrect solution}$
+#### 7. Introducing measurement biases
+
+The next sensitivity study investigates the effect of a **constant azimuth measurement bias** on angle-only orbit determination.
+
+The random measurement noise is kept fixed at $\sigma_\theta = 0.01^\circ$ while a constant bias is added to every azimuth measurement:
+
+$0^\circ,0.001^\circ,0.005^\circ,0.01^\circ,0.05^\circ,0.1^\circ,0.5^\circ,1^\circ,5^\circ$
+
+The orbital configuration, observation duration, measurement cadence, and estimation method remain unchanged.
+
+**Why introduce measurement bias?**
+
+Unlike random measurement noise, which varies between measurements, a measurement bias introduces a **systematic error** into the observations.
+
+The measurement model becomes:
+
+$h(x_{\mathrm{true}}) + b + \epsilon$
+
+where (b) is the constant azimuth bias and (\epsilon) represents the random measurement noise.
+
+The experiment therefore investigates:
+<u>How does a systematic azimuth bias affect the recovered orbit?</u>
+
+and whether the bias can be detected from the post-fit measurement residuals.
+
+##### Running `step10_bias_sweep.py` gives the following:
+###### Table 1
+| azimuth bias [deg] | solver terminated | optimality | final pos err [m] | az resid RMS [deg] | az resid MEAN [deg] | stationarity check | residualcheck | reduced chi-square | scaled J condition | total Jacobian calls | elapsed [s] | initial vel err [m/s] |
+| ------------------ | ----------------- | ---------- | ----------------- | ------------------ | ------------------- | ------------------ | ------------- | ------------------ | ------------------ | -------------------- | ----------- | --------------------- |
+| 0                  | True              | 0.003      | 113.074           | 0.00976            | 0.00000             | True               | True          | 0.9971             | 1240               | 7                    | 0.616       | 0.1181                |
+| 0.001              | True              | 0.000      | 332.125           | 0.00976            | 0.00000             | True               | True          | 0.9971             | 1239               | 8                    | 0.646       | 0.3497                |
+| 0.005              | True              | 0.000      | 1208.411          | 0.00976            | 0.00000             | True               | True          | 0.9971             | 1234               | 9                    | 0.783       | 1.2759                |
+| 0.01               | True              | 0.000      | 2303.734          | 0.00976            | 0.00000             | True               | True          | 0.9972             | 1229               | 8                    | 0.610       | 2.4337                |
+| 0.05               | True              | 0.000      | 11064.416         | 0.00978            | 0.00001             | True               | True          | 0.9989             | 1189               | 8                    | 0.586       | 11.6936               |
+| 0.1                | True              | 0.000      | 22010.572         | 0.00983            | 0.00001             | True               | True          | 1.004              | 1143               | 8                    | 0.719       | 23.2623               |
+| 0.5                | True              | 0.019      | 109406.263        | 0.01125            | 0.00006             | True               | False         | 1.154              | 875                | 6                    | 0.692       | 115.5881              |
+| 1                  | True              | 0.000      | 218287.556        | 0.01433            | 0.00010             | True               | False         | 1.549              | 682.6              | 7                    | 0.624       | 230.5187              |
+| 5                  | True              | 0.000      | 1088059.776       | 0.03369            | 0.00009             | True               | False         | 6.217              | 276                | 21                   | 1.921       | 1146.4085             |
+
+The position error increases substantially as the measurement bias increases. Even a bias of ($0.001^\circ$), which is ten times smaller than the nominal measurement noise standard deviation, increases the final position error from approximately $(109) m$ to $(332) m$.
+
+The relationship is approximately proportional over much of the bias range, although the exact scaling should be quantified separately rather than inferred only from the log-log plot.
+###### Plot 1
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step10_Figure1.png|700](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step10_Figure1.png)
+
+
+The left panel shows the final position error as a function of the injected azimuth bias. The error increases strongly with bias, demonstrating that even relatively small systematic measurement errors can produce significant errors in the estimated state.
+
+The middle panel compares the absolute mean azimuth residual with the injected bias. Despite the increasing position error, the residual mean remains close to zero across the sweep. The estimator is therefore largely absorbing the constant measurement bias into the estimated state rather than leaving it as a systematic measurement residual.
+
+The right panel shows the azimuth residual RMS. For biases up to approximately $(0.1^\circ$), the RMS remains close to the nominal measurement noise level of $(0.01^\circ)$. It only increases substantially for larger biases.
+
+This demonstrates that residual statistics alone may fail to identify a systematic bias while the recovered orbit is already significantly degraded.
+
+###### Plot 2
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step10_Figure2.png|700](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step10_Figure2.png)
+
+Measured−true azimuth at 4 representative bias levels, confirming visually that residual = bias (dotted line) + the same recurring noise pattern, not a widening scatter — the direct visual reason bias is so much more damaging than equivalent-sized noise.
+
+**Interpretation**
+The results demonstrate an important limitation of the current angle-only estimator.
+
+For a biased measurement,
+
+$h(x_{\mathrm{true}})+b+\epsilon,$
+
+the estimator assumes that
+
+$h(x)+\epsilon.$
+
+It can therefore compensate for the measurement bias by finding a state $(x^\ast)$ for which
+
+$$h(x^\ast)
+\approx
+h(x_{\mathrm{true}})+b.$$
+
+The resulting state can be significantly different from the true state while still producing small measurement residuals.
+
+Thus,
+
+$$\boxed{
+\text{measurement bias}
+\rightarrow
+\text{biased estimated state}
+\rightarrow
+\text{small post-fit residual}
+}$$
+
+rather than necessarily producing an obvious residual offset.
+
+This is particularly clear for biases between $(0.001^\circ)$ and $(0.1^\circ)$. Over this range, the position error increases from approximately $(332) m$ to $(22) km$, while the residual RMS remains close to the $(0.01^\circ)$ noise level and the residual mean remains approximately zero.
+
+Only for the larger biases does the residual RMS begin to rise noticeably.
+
+Therefore,
+
+$$\boxed{
+\text{good measurement residuals}
+\not\Rightarrow
+\text{correct estimated state}
+}$$
+
+This differs from the measurement-noise study, where increasing random noise primarily increased the uncertainty and error of the estimated state. Here, the systematic error is capable of producing a persistent bias in the estimated orbit.
+
+This experiment highlights a potential challenge for relative orbit determination using real measurements. A classical estimator that does not explicitly model measurement biases may interpret systematic measurement errors as changes in the satellite state.
+
+If bias detection or robustness to biased measurements is required, residual-based diagnostics alone may therefore be insufficient. Possible approaches for future investigation include explicitly estimating a bias state, incorporating independent measurements, or using additional physical and temporal consistency constraints.
+
+The experiment therefore motivates investigating whether a physics-informed approach can distinguish between:
+
+$$\boxed{  
+\text{a physically correct orbit with biased measurements}  
+}$$
+and 
+$$\boxed{\text{an incorrect orbit that compensates for the measurement bias}}$$
+
+
+#### 8. changing the relative-motion geometry
+
+The final sensitivity study investigates how introducing **relative orbital inclination** affects angle-only orbit determination.
+
+The relative inclination between the two satellite orbits is varied while keeping the remaining simulation and estimation parameters unchanged:
+
+$0^\circ,0.01^\circ,0.05^\circ,0.1^\circ,0.5^\circ,1^\circ,2^\circ,5^\circ$
+
+The $0^\circ$ case corresponds to the original coplanar baseline.
+
+**Why the relative-motion geometry?**
+The baseline configuration is coplanar, meaning that the relative line of sight contains no elevation information:
+
+$\theta_{\mathrm{el}}=0$
+
+Introducing a relative inclination produces genuinely three-dimensional relative motion. The receiver can then observe changes in both azimuth and elevation.
+
+<u>The experiment therefore investigates:</u>
+How does introducing 3D relative motion affect angle-only OD performance
+
+##### Running `step11_relative_inclination_sweep.py` gives the following:
+###### Table 1
+| azimuth bias [deg] | solver terminated | optimality | final pos err [m] | az resid RMS [deg] | az resid MEAN [deg] | stationarity check | residualcheck | reduced chi-square | scaled J condition | total Jacobian calls | elapsed [s] | initial vel err [m/s] |
+| ------------------ | ----------------- | ---------- | ----------------- | ------------------ | ------------------- | ------------------ | ------------- | ------------------ | ------------------ | -------------------- | ----------- | --------------------- |
+| 0                  | True              | 0.003      | 113.074           | 0.00976            | 0.00000             | True               | True          | 0.9971             | 1240               | 7                    | 0.616       | 0.1181                |
+| 0.001              | True              | 0.000      | 332.125           | 0.00976            | 0.00000             | True               | True          | 0.9971             | 1239               | 8                    | 0.646       | 0.3497                |
+| 0.005              | True              | 0.000      | 1208.411          | 0.00976            | 0.00000             | True               | True          | 0.9971             | 1234               | 9                    | 0.783       | 1.2759                |
+| 0.01               | True              | 0.000      | 2303.734          | 0.00976            | 0.00000             | True               | True          | 0.9972             | 1229               | 8                    | 0.610       | 2.4337                |
+| 0.05               | True              | 0.000      | 11064.416         | 0.00978            | 0.00001             | True               | True          | 0.9989             | 1189               | 8                    | 0.586       | 11.6936               |
+| 0.1                | True              | 0.000      | 22010.572         | 0.00983            | 0.00001             | True               | True          | 1.004              | 1143               | 8                    | 0.719       | 23.2623               |
+| 0.5                | True              | 0.019      | 109406.263        | 0.01125            | 0.00006             | True               | False         | 1.154              | 875                | 6                    | 0.692       | 115.5881              |
+| 1                  | True              | 0.000      | 218287.556        | 0.01433            | 0.00010             | True               | False         | 1.549              | 682.6              | 7                    | 0.624       | 230.5187              |
+| 5                  | True              | 0.000      | 1088059.776       | 0.03369            | 0.00009             | True               | False         | 6.217              | 276                | 21                   | 1.921       | 1146.4085             |
+
+All cases converge successfully. Unlike some of the previous sensitivity studies, no clear failure region is observed.
+
+The position error is also **non-monotonic** with relative inclination. Small inclinations initially produce similar or slightly larger errors than the coplanar case, but the error decreases substantially for larger inclinations. The $1^\circ$ case gives the smallest final position error, at approximately $7.6 m$.
+
+###### Plot 1
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step11_Figure1.png|700](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step11_Figure1.png)
+The first panel shows that the position error does not simply increase or decrease with inclination. The error initially remains close to the coplanar baseline, then decreases substantially as the geometry becomes more three-dimensional.
+
+The best result occurs at $1^\circ$, where the final position error is approximately $7.6 m$, compared with $108.7 m$ for the coplanar case. The $2^\circ$ and $5^\circ$ cases also produce substantially smaller errors than the baseline.
+
+The second panel shows that both azimuth and elevation residual RMS remain close to the measurement noise level across the entire inclination range. This indicates that the improved state estimates are not simply associated with larger or smaller measurement residuals.
+
+The third panel shows the maximum true elevation angle over the observation arc. Unlike the position error, this quantity increases smoothly with inclination, reaching approximately $78^\circ$ at $5^\circ$.
+
+This provides a direct indication of how much additional elevation information is introduced as the geometry becomes increasingly three-dimensional.
+###### Plot 2
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step11_Figure2.png|700](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step11_Figure2.png)
+The azimuth measurements retain a similar overall time evolution for all inclinations. The dominant secular variation is therefore not qualitatively changed by introducing relative inclination.
+
+The elevation histories show the main change in the measurement geometry.
+
+For the coplanar case,
+
+$\theta_{\mathrm{el}}(t)=0$
+
+throughout the observation arc, so elevation provides no information about the relative state.
+
+At ($0.1^\circ$), a small but clearly varying elevation signal appears. Increasing the inclination to ($1^\circ$) produces a much larger sinusoidal elevation variation, while the $5^\circ$ case produces elevation excursions approaching ($\pm 80^\circ$).
+
+Thus, increasing inclination introduces an additional, dynamically varying measurement component without removing the azimuth information already present.
+
+###### Plot 3
+![C:\Users\xnb26181\Documents\RODINN\Angle_OD\figures\step11_Figure3.png|700](file:///c%3A/Users/xnb26181/Documents/RODINN/Angle_OD/figures/step11_Figure3.png)
+ Plot 3 shows the true relative trajectory in 3D at 4 representative inclinations, the first non-flat trajectory plot in the whole roadmap, closing out the coplanar-limitation thread flagged all the way back in step1.
+
+
+**Interpretation**
+The results indicate that introducing three-dimensional relative motion does not inherently make angle-only OD more difficult. In fact, the larger-inclination cases produce substantially smaller position errors than the coplanar baseline.
+
+The improvement is consistent with the additional information provided by the elevation measurement. In the coplanar case,
+
+$\theta_{\mathrm{el}}=0,$
+
+so the estimator effectively relies only on the azimuth history. With relative inclination, the elevation becomes a time-varying function of the relative state:
+
+$\theta_{\mathrm{el}}=\theta_{\mathrm{el}}(t,\mathbf{x}_0),$  
+
+providing an additional measurement-history constraint on the unknown initial state.
+
+Therefore, the geometry changes from a two-dimensional relative-motion problem to a genuinely three-dimensional one, while retaining both angular measurement components.
+
+The relationship can be summarised as:
+
+$$\boxed{  
+\text{3D relative motion}  
+\rightarrow  
+\text{additional elevation information}  
+\rightarrow  
+\text{more constraints on the state}  
+\rightarrow  
+\text{potentially improved OD accuracy}  
+}  $$
+
+The non-monotonic position-error curve indicates that the amount of inclination alone does not determine OD performance. The detailed geometry and evolution of the measurement history also matter. The (1^\circ) case provides the best result in this particular configuration, but this should not be interpreted as a universal optimal inclination.
+
+**Key finding**
+The experiment demonstrates that the relative-motion geometry can strongly affect the performance of angle-only OD.
+
+In particular, a coplanar configuration provides no elevation information, whereas introducing relative inclination creates a measurable and dynamically varying elevation signal. The results show that this additional information can substantially improve the recovered state.
+
+However, the exact improvement depends on the geometry over the observation arc rather than simply on the magnitude of the inclination.
+
+**OD performance depends strongly on the information content of the relative measurement geometry**
+
+
+
+# Relative Doppler Shift Literature
+
+After understanding Angle OD I moved into relativity and how to derive the relative doppler shift which can be seen in the [[Doppler]] file. 
+
+Now I have focused more on reading papers. I scanned all papers in the Papers/Doppler folder and focused on those I think are the most relevant (marked with a green icon).
+#### Most relevant papers & their gaps
+##### [[Autonomous Orbit Determination Method Based on Inter-satellite Doppler Measurement]] 
+**Main limitation:** The paper establishes feasibility of EKF-based inter-satellite Doppler OD for a single MEO/GEO target using multiple reference satellites, but under a relatively idealised measurement and reference-orbit model.
+
+**Explicit future work:** Extend the approach to LEO and whole-constellation autonomous OD; incorporate additional real measurement errors such as frequency offset and antenna centroid error.
+
+**Potential research gaps:**  
+– single-pair satellite-to-satellite Doppler-only relative OD  
+– joint estimation when neither spacecraft state is perfectly known  
+– formal observability/geometry analysis  
+– LEO relative OD  
+– sparse/intermittent Doppler measurements  
+– sensitivity to initial-state error and observation arc length  
+– realistic Doppler/clock/bias error modelling  
+– comparison of EKF with batch optimisation/PINNs  
+– Doppler fused with range/angle measurements
+
+##### [[Autonomous Navigation for Satellite Formations - Advancing Missions Beyond Earth with Inter-satellite Radio Tracking]]
+
+**Main limitations:**
+- Focuses mainly on **cislunar/deep-space SST-based OD**, rather than LEO relative orbit determination.
+- Considers **range, range-rate and LOS angles**, but Doppler/range-rate-only OD is not the central focus; range often performs better in the studied scenarios.
+- Some analyses rely on **simplified dynamical models**; higher-fidelity SRP and orbital dynamics could alter observability and OD performance.
+- The influence of **relative orbital orientation** on observability is not explored systematically.
+- Spacecraft **attitude**, realistic link availability, clock/time-tagging effects and some systematic-error effects are not treated in full detail.
+- Tracking-window optimisation is studied, but realistic operational constraints and fully autonomous implementation remain challenging.
+
+**Explicit future work:**
+- Investigate **consider-parameter estimation**, where one spacecraft state is treated as known but uncertain rather than jointly estimated.
+- Include spacecraft attitude/orientation effects in ISL and link-budget modelling.
+- Study onboard **clock and time-tagging errors**, including master-spacecraft clock effects in multi-satellite formations.
+- Improve tracking-window planning while considering scientific operations, station-keeping and propellant consumption.
+- Investigate more computationally efficient, resource-aware and real-time onboard implementations.
+- Study optimal relative orbital orientations and higher-fidelity dynamics for small-body scenarios.
+
+**Potential research gaps:**
+- **LEO-to-LEO Doppler-only relative OD**.
+- Single-link estimation of the full relative state:
+	$[\Delta r, \Delta v]$
+- Doppler observability as a function of:
+    - separation,
+    - relative geometry,
+    - arc length,
+    - measurement cadence.
+- Robustness to:
+    - poor initial guesses,
+    - sparse/intermittent Doppler,
+    - clock/frequency bias,
+    - dynamics/model mismatch,
+    - uncertain reference-spacecraft states.
+- Direct comparison of **PINNs/physics-informed estimators vs EKF/UKF/batch methods** under identical Doppler-only conditions.
+- Using physics-informed learning to exploit dynamics during measurement gaps or weakly observable geometries.
+- Joint estimation of relative state plus nuisance/system parameters such as clock bias or model-error parameters.
+
+##### [[In-Orbit Space Situational Awareness Using Doppler Frequency Shift]]
+
+**Main limitations:**
+- Assumes **active/cooperative satellites transmitting a narrowband beacon**; the method does not handle defunct satellites or passive debris.
+- Main estimation model assumes **circular, same-altitude (co-shell) orbits**, reducing the relative geometry to only $[\Delta i, \Delta w]$. If therefore does not estimate a general 6D relative state.
+- Uses a short-arc **Keplerian model** without perturbations; the author notes errors of tens to hundreds of metres relative to SGP4 over several minutes.
+- Objective is mainly **closest-approach/miss-distance estimation**, rather than continuous relative orbit determination.
+- Doppler noise is represented by a simplified **Gaussian error model**.
+- Experimental Doppler validation is **satellite-to-ground**, not a real inter-satellite link.
+- Available observation time can be only a few minutes because of link-budget, Earth-occlusion and orbital-geometry constraints.
+- Accuracy improves as measurements are collected closer to conjunction, creating a trade-off between estimation accuracy and remaining manoeuvre time.
+
+**Explicit future work:**
+- No substantial dedicated future-work section is given.
+- The clearest explicitly acknowledged limitation is extension beyond **active satellites to defunct/passive objects**, which the proposed approach currently cannot address.
+
+**Potential research gaps:**
+- Extend from two orbital parameters to full relative-state estimation:
+    $[\Delta r, \Delta v]$
+- Doppler-only ROD for **non-circular, different-altitude and more general LEO formations**.
+- Replace short-arc Keplerian dynamics with higher-fidelity orbital dynamics and perturbations.
+- Investigate observability versus:
+    - relative separation,
+    - orbital-plane geometry,
+    - arc length,
+    - sampling rate,
+    - link outages.
+- Robustness to:
+    - poor initial guesses,
+    - clock/frequency bias,
+    - non-Gaussian Doppler errors,
+    - dynamics mismatch.
+- Estimate relative state continuously rather than only conjunction parameters/miss distance.
+- Compare **PINN/physics-informed estimation** against the paper's nonlinear optimisation approach.
+- Use PINN dynamics to bridge sparse Doppler measurements or short/interrupted observation arcs.
+- Validate with realistic or experimental **inter-satellite Doppler**, rather than ground-based Doppler measurements.
+
+
+##### [[Hera Inter-Satellite link Doppler characterization for Didymos Gravity Science experiments]]
+
+**Main limitations:**
+- Focus is primarily **ISL Doppler hardware characterization and gravity-field estimation**, not relative orbit determination between Hera and the CubeSats.
+- Orbit determination is performed **on the ground** after ISL observables are transmitted from Hera; no autonomous/on-board estimator is developed.
+- Preliminary laboratory Doppler tests are performed in **stationary conditions with no relative dynamics**, at only $~1 m$ separation and unusually high $P_C/N_0$, rather than representative flight conditions.
+- Gravity-science OD uses **covariance analysis**, with the same models generating and processing the simulated observations. This does not test robustness to dynamics/model mismatch.
+- Main simulations consider **Hera–Juventas**; Milani's contribution is omitted.
+- ISL availability is represented through predefined duty cycles rather than irregular outages or autonomous scheduling.
+
+**Future Explicit Work:**
+- Test different **CubeSat PLL loop bandwidths** and Doppler integration/count times.
+- Introduce realistic **Doppler dynamics into the transmitted signal** and assess PLL lock under different loop-bandwidth settings.
+- Study the contribution of the **Milani CubeSat** to the radio-science/OD performance.
+- Further optimise the trade-off between **ISL duty cycle, onboard resources and scientific return**.
+
+**Potential Research Gaps:**
+- Use real/realistic ISL Doppler for **full relative-state estimation** $[\Delta r, \Delta v]$ rather than mainly gravity-field estimation.
+- Develop **autonomous/on-board Doppler relative OD** instead of ground-based post-processing.
+- Study Doppler-only ROD under realistic spacecraft dynamics, rather than stationary laboratory conditions.
+- Test robustness to:
+    - dynamics/model mismatch,
+    - variable SNR,
+    - changing Doppler rate,
+    - intermittent ISL availability,
+    - measurement biases and transponder/PLL errors.
+- Investigate how **measurement integration time and link-processing choices affect ROD observability and state accuracy**, not only Doppler stability.
+- Compare **range-only, Doppler-only and range+Doppler relative OD** directly.
+- Apply a **physics-informed neural estimator/PINN** to the Hera-type ISL observ- able and compare against classical OD methods.
+- Investigate whether physics-informed dynamics can maintain accurate relative-state estimates during the low-duty-cycle periods where no ISL measurements are available.
+
+
+##### [[Navigation using carrier Doppler shift from a LEO constellation TRANSIT on steroids]]
+
+**Main limitations:**
+- Solves **ground/user navigation from many LEO satellites**, not satellite-to-satellite relative OD. At least **8 simultaneous Doppler measurements** are required to estimate position, velocity, clock offset and clock drift.
+- Uses a **single-epoch nonlinear least-squares point solution**, rather than exploiting spacecraft dynamics and a Doppler time history.
+- Performance is demonstrated mainly using **simulated measurements**; the truth and estimator atmospheric models are assumed to match.
+- Assumes relatively accurate satellite ephemerides and clock-frequency knowledge; achieving these accuracies without existing GNSS may be difficult.
+- Gauss–Newton convergence can degrade for poor initial guesses; tested initial position errors are only about 150 km, not true global cold-start errors.
+- Practical issues including limited satellite signal footprints, multipath, atmospheric modelling errors and multi-access signal processing remain unresolved.
+
+
+**Explicit Future Works:**
+- Test convergence from **very large cold-start position errors**, potentially up to ~20,000 km, and develop methods to enlarge the convergence region.
+- Investigate **multipath effects** on carrier-Doppler navigation.
+- Study the impact of **tropospheric and ionospheric modelling errors**.
+- Investigate combining **multiple LEO constellations** to improve geometry/GDOP.
+- Determine achievable **satellite ephemeris and transmitter-clock accuracy independently of GNSS**, and study its effect on navigation performance.
+- Develop practical signal/multiple-access strategies for receiving Doppler from many satellites simultaneously.
+
+**Potential research gaps:**
+- **Single-link inter-satellite Doppler relative OD**, rather than many known transmitters observing one receiver.
+- Estimate the full relative state: $[\Delta\mathbf r,\Delta\mathbf v]$.
+- Exploit a **Doppler time history + orbital dynamics** instead of requiring ≥8 simultaneous measurements.
+- Study observability versus:
+    - arc length,
+    - relative geometry/separation,
+    - sampling rate,
+    - measurement gaps.
+- Robustness to **poor initial states**, directly motivated by Psiaki's convergence limitation.
+- Joint estimation of relative state with **clock/frequency bias and uncertain reference-orbit states**.
+- Compare **PINN/physics-informed estimation vs Gauss–Newton/batch least squares**.
+- Investigate whether physics-informed dynamics can recover states in **weakly observed or sparse-Doppler cases**, where a point solution is impossible.
+
+
+##### [[Revisiting Doppler positioning performance with LEO satellites]]
+**Main limitations:**
+- Focuses on **ground/receiver Doppler positioning**, not inter-satellite relative orbit determination.
+- Uses a **single-epoch least-squares solution** requiring at least **7 simultaneously visible satellites** to estimate receiver position, velocity and clock drift.
+- Results are based entirely on **simulated ephemerides and Doppler observations**, not real navigation data.
+- Assumes satellite position/velocity can be known very accurately; meter-level positioning requires satellite position errors of only several metres and velocity errors of several cm/s.
+- Strong sensitivity to **initial position error**: solutions may diverge once the initial error exceeds roughly 300 km, with no convergence around 410 km in the tested case.
+- Atmospheric corrections are important for ground-based Doppler; significant uncertainty remains regarding the effect of **tropospheric/ionospheric model mismatch** on real LEO Doppler measurements.
+- Assumes future mega-constellations provide enough simultaneously visible satellites, which may not always hold in practice.
+
+**Explicit future work:**
+- Develop a **satellite-selection algorithm** to exploit large numbers of visible LEO satellites and improve Doppler positioning geometry/accuracy.
+- Further develop **navigation payloads and signals** enabling communication LEO satellites to support Doppler navigation.
+
+**Potential research gaps:**
+- **Inter-satellite Doppler-only relative OD** instead of ground-user positioning.
+- Recover the full relative state $[\Delta r, \Delta v]$ from one or a small number of inter-satellite links.
+- Exploit **Doppler measurements over time + orbital dynamics**, rather than requiring seven simultaneous measurements.
+- Investigate observability versus:
+    - separation,
+    - relative geometry,
+    - arc length,
+    - sampling cadence.
+- Robustness to **poor initialization**, directly motivated by the convergence problems identified here.
+- Joint estimation of relative state with:
+    - uncertain spacecraft ephemerides,
+    - clock/frequency drift,
+    - measurement biases.
+- Compare **PINN/physics-informed estimation with nonlinear least squares** under identical Doppler-only conditions.
+- Investigate whether physics-informed dynamics can reduce the dependence on **many simultaneous observations** and maintain estimation through sparse/intermittent Doppler data.
+
+
+##### [[An Algorithm for Harsh Doppler Shift Estimation for Satellite Communications]]
+
+**Main limitations:**
+- Focuses on **estimating the Doppler shift itself for satellite communications**, not using Doppler to estimate position or orbit.
+- Scenario is **satellite-to-ground**, not inter-satellite relative navigation.
+- Assumes **line-of-sight pilot-signal transmission** and that Doppler is approximately constant over each received pilot block.
+- Main simulations assume **circular LEO orbits** (e=0)(e=0), reducing the orbital model complexity.
+- Orbital parameters are estimated only to generate a good **Doppler pre-compensation curve**; the method explicitly does **not aim to recover the true satellite position/orbit**. Different orbital parameter sets can produce the same Doppler profile.
+- Performance is evaluated using **numerical simulations**, rather than real satellite signals.
+- The method relies on a computationally expensive **grid search over orbital parameters**, followed by simplex optimisation.
+- Results primarily assess estimation of the **strongest Doppler shift** and its bias/MSE, rather than how Doppler errors propagate into navigation or OD accuracy.
+
+**Explicit future work:**
+- The paper does **not identify a substantial dedicated future-work programme**.
+- Its conclusion mainly proposes the algorithm as a standalone Doppler-estimation technique for future satellite communication systems, potentially without GNSS assistance.
+
+**Potential research gaps:**
+- Use estimated Doppler as an input to **relative orbit determination**, rather than stopping at frequency estimation.
+- Investigate:
+    $\text{raw RF} \rightarrow \hat f_D \rightarrow \hat{\dot\rho} \rightarrow [\Delta\mathbf r,\Delta\mathbf v].$
+- Study how **Doppler-estimation uncertainty propagates into relative-state accuracy**.
+- Extend from satellite-to-ground to **inter-satellite Doppler links**.
+- Resolve or exploit the orbital-parameter ambiguity identified by the authors using **orbital dynamics over time**.
+- Test realistic effects such as:
+    - changing Doppler rate within a measurement block,
+    - non-circular orbits,
+    - clock/frequency bias,
+    - intermittent pilots,
+    - signal dropouts,
+    - model mismatch.
+- Couple the signal-processing layer directly to a **PINN/physics-informed ROD estimator**, rather than treating Doppler extraction and OD as completely separate problems.
+- Compare whether a physics-informed estimator can remain robust when the Doppler estimates are biased or noisy under the “harsh” low-sampling-frequency conditions studied here.
+
+
+
+#### Comparing & identifying the literature gap
+However, within the literature reviewed so far, I have not found a study combining all of the following:
+
+- Doppler-based relative orbit determination for a **single LEO satellite pair**
+- Doppler-only **Inter-Satellite Link (ISL)**
+- Recovery of the full relative state
+	$\mathbf{x}_{rel} = \begin{bmatrix} \Delta \mathbf r\\ \Delta \mathbf v \end{bmatrix}$
+- Orbital dynamics used to constrain the solution
+- Physics-Informed Neural Networks (PINNs)
+
+Gaps addressed by each paper:
+
+| Paper                                                                                                                    | Single LEO pair Doppler ROD | Doppler-only ISL | Recovery of the full state | Dynamic constrain solution | PINNs |
+| ------------------------------------------------------------------------------------------------------------------------ | --------------------------- | ---------------- | -------------------------- | -------------------------- | ----- |
+| [[In-Orbit Space Situational Awareness Using Doppler Frequency Shift]]                                                   | YES                         | YES              | PARTIALLY                  | PARTIALLY                  |       |
+| [[Autonomous Orbit Determination Method Based on Inter-satellite Doppler Measurement]]                                   |                             | PARTIALLY        | YES*                       | YES*                       |       |
+| [[Autonomous Navigation for Satellite Formations - Advancing Missions Beyond Earth with Inter-satellite Radio Tracking]] | PARTIALLY                   | PARTIALLY        | YES*                       | YES*                       |       |
+| [[Hera Inter-Satellite link Doppler characterization for Didymos Gravity Science experiments]]                           | PARTIALLY                   | PARTIALLY        | PARTIALLY                  | YES*                       |       |
+| [[Navigation using carrier Doppler shift from a LEO constellation TRANSIT on steroids]]                                  |                             |                  | YES*                       |                            |       |
+| [[Revisiting Doppler positioning performance with LEO satellites]]                                                       |                             |                  | YES*                       |                            |       |
+| [[An Algorithm for Harsh Doppler Shift Estimation for Satellite Communications]]]                                        |                             |                  |                            | PARTIALLY                  |       |
+$*$ papers estimate a full position/ velocity state, BUT not necessarily the full relative state from one inter-satellite Doppler link
+
+##### Proposed next steps
+1. Pick two LEO satellites, with the state of satellite A known.
+2. Generate only $\dot\rho(t)$ / Doppler measurements from satellite B.
+3. Treat B's initial relative state, $\Delta\mathbf r_0 \Delta\mathbf v_0,$ as unknown.  
+4. Attempt to recover the state first using **batch nonlinear least squares**.  
+5. Vary **arc length, satellite separation, and relative orbital geometry**.  
+6. Identify where state recovery succeeds, becomes poorly conditioned, or becomes non-unique.  
+7. Only then construct the PINN and compare its performance against the classical estimator.
+
+**In other words**: Investigate the observability and estimation of the relative position and velocity of a single LEO satellite pair using only inter-satellite Doppler measurements and orbital dynamics. + Assess whether physics-informed neural estimation improves robustness to weak observability, sparse measurements, noise, model mismatch or poor initialisation compared with classical estimators.
+# Doppler Based Relative Orbit Determination
+
+#### Overall research question
+Can the relative state of one LEO satellite with respect to another be recovered using only an inter-satellite Doppler time history and orbital dynamics?
+
+The overall aim is to investigate whether the relative orbit between two LEO satellites can be determined using only Doppler measurements from an Inter-Satellite Link (ISL). The problem will initially be highly simplified and then progressively made more realistic.
+
+#### General Doppler measurement model
+Note that geometry and derivations are mostly taken from [[In-Orbit Space Situational Awareness Using Doppler Frequency Shift]] paper.
+Also note that Al-Hourani addresses most things, except no PINNs and it only estimates $\Delta i$ (inclination angle between two orbits) and a phase parameter, so no distance. It also uses Keplerian / circular orbital motion to constrain the Doppler profile but does not do a general 6 state OD. 
+
+Consider two satellites, A and B, with position and velocity vectors $$ \mathbf r_A(t), \qquad \mathbf v_A(t) $$ and $$ \mathbf r_B(t), \qquad \mathbf v_B(t). $$ The relative position of B with respect to A is $$ \Delta \mathbf r(t) = \mathbf r_B(t)-\mathbf r_A(t) $$ and the relative velocity is $$ \Delta \mathbf v(t) = \mathbf v_B(t)-\mathbf v_A(t). $$ The instantaneous distance between the two satellites is therefore $$ \rho(t) = \|\Delta\mathbf r(t)\| = \|\mathbf r_B(t)-\mathbf r_A(t)\|. $$ The rate of change of this distance, or **range-rate**, is $$ \dot\rho(t) = \frac{ \Delta\mathbf r(t)\cdot\Delta\mathbf v(t) }{ \|\Delta\mathbf r(t)\| }. $$ This can also be written as $$ \dot\rho(t) = \hat{\boldsymbol\rho}(t)\cdot\Delta\mathbf v(t), $$ where $$ \hat{\boldsymbol\rho}(t) = \frac{\Delta\mathbf r(t)} {\|\Delta\mathbf r(t)\|} $$ is the unit line-of-sight vector from A to B. The measured Doppler frequency shift is related to the inter-satellite range-rate by $$ f_D(t) = -\frac{f_0}{c}\dot\rho(t), $$ where - $f_0$ is the transmitted carrier frequency, - $c$ is the speed of light, - $\dot\rho$ is the inter-satellite range-rate. Equivalently, $$ \dot\rho(t) = -\frac{c}{f_0}f_D(t). $$ Therefore, a Doppler measurement gives information about the component of the relative velocity along the line joining the two satellites. A single Doppler measurement provides only one scalar quantity and is therefore not sufficient by itself to determine the full three-dimensional relative state $$ \mathbf x_{\mathrm{rel}} = \begin{bmatrix} \Delta\mathbf r\\ \Delta\mathbf v \end{bmatrix}. $$ Instead, a **time history of Doppler measurements** $$ f_D(t_1),\, f_D(t_2),\, \dots,\, f_D(t_N) $$ is combined with an orbital dynamics model. For a trial set of unknown parameters $\mathbf p$, the corresponding orbit is propagated to every measurement time $t_k$ and a predicted Doppler history is generated: $$ \mathbf p \rightarrow \mathbf r_B(t),\mathbf v_B(t) \rightarrow \dot\rho(t) \rightarrow f_D^{pred}(t). $$The estimated parameters are obtained by minimising the difference between the predicted and measured Doppler histories: $$ \boxed{ \hat{\mathbf p} = \arg\min_{\mathbf p} \sum_{k=1}^{N} \left( f_{D,k}^{pred}(\mathbf p) - f_{D,k}^{meas} \right)^2 } $$ The definition of the parameter vector $\mathbf p$ depends on the assumptions made in each experiment. For example, in the first simplified circular co-altitude case, $$ \mathbf p = [i_B,\Omega_B,u_{B,0}], $$
+whereas later experiments may estimate a larger set of orbital elements or the full Cartesian state. The general estimation problem can therefore be summarised as $$ \boxed{ \text{Doppler measurements} + \text{orbital dynamics} \rightarrow \text{estimate the unknown state} } $$
+ 
+#### Experiment 1 - Baseline circular orbit & same altitude
+
+##### Purpose
+Can the estimator recover the correct orbit in the simplest possible ideal case? Before studying observability, noise, geometry or realistic dynamics, first verify that the forward model and nonlinear least-squares estimator work correctly.
+
+##### Assumptions
+For the first numerical experiment:
+
+- Both spacecraft are in LEO.
+- Satellite A's state is perfectly known.
+- Both truth orbits are circular.
+- Both satellites have the same orbital altitude.
+- Keplerian / two-body Earth dynamics are used.
+- No perturbations or manoeuvres are included.
+- Perfect time synchronisation is assumed.
+- Continuous line of sight is assumed over the observation arc.
+- Doppler measurements are regularly sampled.
+- Doppler measurements are initially noise-free.
+- No oscillator or frequency bias is included.
+
+##### Geometry
+Consider two satellites travelling on circular orbits at the same orbital radius $a$. 
+
+Below is a figure of the geometry of satellites A and B. ![C:\Users\xnb26181\Documents\RODINN\Doppler\figures\doppler_geometry.png](file:///c%3A/Users/xnb26181/Documents/RODINN/Doppler/figures/doppler_geometry.png)The angle between the two satellite position vectors is the central angle $\psi$ which can be defined as:
+$$\psi = \cos ^{-1} \left(\frac{\vec r_A \cdot \vec r_B}{a^2} \right) \tag{1}$$
+since:
+$$||\vec r_A|| = ||\vec r_B|| = a \tag{2}$$
+
+and using the cos rule , the straight-line separation between the two satellites, the chord length $\rho$, can be defined as:
+$$\rho = a\sqrt{2(1- \cos\psi)} \tag{3}$$
+Substituting Eq(1):
+$$\rho= \sqrt{2a^2 - 2\vec r_A \cdot \vec r_B} \tag{4}$$
+which is equivalent to:
+$$\rho = ||\vec r_B - \vec r_A|| \tag{5}$$
+
+The Doppler frequency shift is related to the rate of change of the inter-satellite distance:
+$$f_D = - \frac{f_0}{c} \frac{d\rho}{dt} = - \frac{f_0}{c} \dot \rho\tag{6}$$
+or equivalently
+$$\dot \rho = - \frac{c}{f_0}f_D \tag{7}$$
+
+A single Doppler measurement is not sufficient to determine the full state of B. Instead, a **time history of Doppler measurements** is used to determine which initial state of B produces the observed Doppler evolution when propagated using the orbital dynamics.
+
+
+##### Circular parameterization 
+Satellite A's state is assumed to be known:
+
+$$\mathbf x_A(t) = \begin{bmatrix} \mathbf r_{A,t}\\ \mathbf v_{A,t} \end{bmatrix}. \tag{8}$$
+This assumption provides an absolute reference from which the orbit of B can be estimated. Initially, no uncertainty is included in the state of A.
+
+
+B's unknown initial state can be defined as:
+$$\mathbf x_{B,0} = \begin{bmatrix} \mathbf r_{B,0}\\ \mathbf v_{B,0} \end{bmatrix}. \tag{9}$$
+
+For the trial value of $X_{B,0}$ we propagate the orbit of B to every measurement time $t_k$. 
+
+At each measured time,
+$$\begin{aligned} 
+\Delta r_k = r_B (t_k) - r_A (t_k), \\ 
+\Delta v_k = v_B (t_k) - v_A (t_k) 
+\end{aligned} \tag{10}$$
+the predict range-rate is,
+$$\dot \rho_k = \frac{\Delta r_k \cdot \Delta v_k}{|| \Delta r_k||} \tag{11}$$
+Therefore, the corresponding  predicted Doppler is
+$$f^{pred}_{D,k} = - \frac{f_0}{c} \dot \rho_k \tag{12}$$
+Because of the simplifications we just chose. If you assume B is **exactly circular and at the same known altitude $a$**, then its six Cartesian components are not six independent unknowns anymore. You have constraints:
+
+$\|\mathbf r_B\|=a,\quad \mathbf r_B\cdot\mathbf v_B=0,$  
+
+and
+
+$\|\mathbf v_B\| = \sqrt{\frac{\mu}{a}}.$
+
+So for the very first model, we don't need to estimate six free Cartesian variable. I would estimate three parameters defining B's circular orbit:
+
+$\boxed{ [i_B,\ \Omega_B,\ u_{B,0}] }$
+
+where
+
+- $i_B$ = inclination,
+- $\Omega_B$ = RAAN,
+- $u_{B,0}$ = initial argument of latitude / orbital phase.
+
+Since $a$ is known and $e=0$, those three quantities completely determine B's initial position and velocity.
+
+For example, in B's orbital plane,
+
+$\mathbf r_{\rm orb} = a \begin{bmatrix} \cos u\\ \sin u\\ 0 \end{bmatrix},$
+
+and
+
+$\mathbf v_{\rm orb} = \sqrt{\frac{\mu}{a}} \begin{bmatrix} -\sin u\\ \cos u\\ 0 \end{bmatrix}$.
+
+Rotate these into ECI:
+
+$$ \begin{aligned}
+\mathbf r_B = R_3(\Omega_B)R_1(i_B)\mathbf r_{\rm orb}, \\ \mathbf v_B = R_3(\Omega_B)R_1(i_B)\mathbf v_{\rm orb}.
+\end{aligned}$$
+
+Then under the simple circular two-body model,
+
+$u_B(t)=u_{B,0}+nt, \qquad n=\sqrt{\frac{\mu}{a^3}}.$
+
+And the optimizer finds the three values that reproduce the measured Doppler curve.
+
+Once $i_B,\Omega_B,u_{B,0},$ is recovered we convert them back into
+
+$\boxed{ \mathbf x_{B,0} = [x_B,y_B,z_B,v_{xB},v_{yB},v_{zB}]^T }$
+
+so we still end up with the six-component state vector.
+
+##### Simulation setup
+Initial baseline values:
+
+| Parameter            |           Value |
+| -------------------- | --------------: |
+| Earth radius         | \(6378.137\) km |
+| Altitude             |      \(700\) km |
+| Orbital radius \(a\) | \(7078.137\) km |
+| Dynamics             |        Two-body |
+| Carrier frequency    |      \(10\) GHz |
+| Sampling interval    |        \(10\) s |
+| Observation arc      |      \(30\) min |
+| Doppler noise        |        \(0\) Hz |
+
+##### Implementation
+The first test uses synthetic data so that the true orbit of B is known for validation.
+
+- Truth Orbit of Satellite A (known by the estimator):
+	$i_A = 50^\circ$
+	$\Omega_A = 0^\circ$
+	$u_{A,0}=20^\circ$
+- Truth Orbit of Satellite B not supplied to the estimator, but used for the synthetic Doppler measurements):
+	$i_B = 55^\circ$
+	$\Omega_B = 15^\circ$
+	$u_{B,0}=45^\circ$
+- First initial guess:
+	$i_B^{guess}=48^\circ$
+	$\Omega_B^{guess}=10^\circ$
+	$u_{B,0}^{guess}=35^\circ.$
+
+
+Python script **``step1_baseline.py``** performs this estimation (inside the Doppler/scripts folder)
+
+Main functions: 
+-  `circular_state()`
+	Inputs:
+	$t,\quad i,\quad\Omega,\quad u_0$
+	Outputs:
+	$\mathbf r(t),\quad\mathbf v(t).$
+	
+- `range_rate()`
+	Computes
+	$\dot\rho = \frac{\Delta\mathbf r\cdot\Delta\mathbf v}{\|\Delta\mathbf r\|}$
+	
+- `doppler_from_range_rate()`
+	Computes
+	$f_D=-\frac{f_0}{c}\dot\rho.$
+- `residuals()`
+	For a trial $[i_B,\Omega_B,u_{B,0}],$ 
+	the function propagates B, calculates the predicted Doppler, and returns
+	$f_D^{pred} - f_D^{meas}$
+	The parameters are estimated using SciPy's nonlinear least-squares optimiser.
+
+##### Results 
+Initial guess is: 
+$[48^\circ,10^\circ,35^\circ]$
+
+Result is:
+$[55^\circ,15^\circ,45^\circ]$
+with essentially zero state and Doppler residual
+
+We know this matches the truth states. 
+##### Conclusion
+The implementation is functioning correctly in the ideal noise-free case.
+
+#### Experiment 2 - Multiple Solutions & Doppler Ambiguity
+
+##### Purpose
+Is the Doppler-only solution unique? Although Experiment 1 recovered the correct state, this does not establish that it is the only state capable of reproducing the Doppler history. The optimisation was therefore repeated from widely separated starting points.
+
+##### Method
+Repeat the optimisation from several widely separated initial guesses while keeping the truth scenario, measurements and estimator unchanged.
+
+##### Results 
+
+| Run      | Initial guess $[i,\Omega,u_0]$    | Final position error | Final velocity error |    Max Doppler residual |
+| -------- | --------------------------------- | -------------------: | -------------------: | ----------------------: |
+| Baseline | $[48^\circ,10^\circ,35^\circ]$    |           $\approx0$ |           $\approx0$ | $6.18\times10^{-11}$ Hz |
+| Start 1  | $[35^\circ,-20^\circ,60^\circ]$   |           $\approx0$ |           $\approx0$ | $7.28\times10^{-11}$ Hz |
+| Start 2  | $[75^\circ,40^\circ,10^\circ]$    |            $7888$ km |          $8.34$ km/s | $9.64\times10^{-11}$ Hz |
+| Start 3  | $[100^\circ,120^\circ,160^\circ]$ |            $8038$ km |          $8.73$ km/s | $1.02\times10^{-10}$ Hz |
+| Start 4  | $[140^\circ,250^\circ,280^\circ]$ |             $962$ km |          $3.19$ km/s | $1.13\times10^{-10}$ Hz |
+
+The baseline and Start 1 both converged to the true orbit.
+
+However, Starts 2, 3 and 4 converged to physically different orbital states while still reproducing the measured Doppler history to essentially numerical precision.
+
+Meaning that an identical Doppler history does not necessarily imply a unique orbit
+##### Sensitivity
+The singular values of the local Jacobian for the baseline solution were approximately
+
+$$
+[826874,\ 669669,\ 2930]\text{ Hz/rad}.
+$$
+All three singular values were non-zero, indicating that small perturbations of the three parameters around the true solution produce distinguishable changes in the Doppler measurements. However, this is only a local result. The multi-start test identified orbital solutions producing the same Doppler history, demonstrating that local sensitivity does not guarantee a globally unique orbit solution. 
+
+##### Conclusion
+The first Doppler-only orbit determination test demonstrates that the nonlinear least-squares estimator can recover the true circular orbit of satellite B to numerical precision when the initial estimate lies within the basin of the true solution.
+
+However, the multiple-start experiment also reveals that there are other physically distinct orbital states that reproduce essentially the same Doppler history.
+
+The optimiser therefore reports successful convergence for both the correct and incorrect orbital solutions because it is only minimising the Doppler residual. A very small residual does not by itself guarantee that the correct physical orbit has been recovered.
+
+The main result of this first test is therefore:
+
+**The estimator works, but the Doppler-only measurement problem is not globally unique under the current assumptions.**
+
+The next step is therefore to keep the current idealised model unchanged and investigate the source of these alternative solutions. In particular, the aim is to determine what geometrical symmetry allows physically different B orbits to produce the same inter-satellite range-rate and Doppler history.
+
+Do note that: a single Doppler measurement gives only one scalar,
+ $\dot{\rho} = \hat{\boldsymbol{\rho}}\cdot\Delta\mathbf v,$ 
+so it measures only the relative velocity component along the instantaneous line of sight. It does not directly give the transverse components or the full 3D geometry. Which matches with what we've just discovered.
+#### Experiment 3 - Non-uniqueness 
+
+##### 

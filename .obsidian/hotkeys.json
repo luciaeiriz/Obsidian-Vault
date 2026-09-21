@@ -1,0 +1,29 @@
+{
+  "obsidian-zotero-desktop-connector:zdc-exp-Inbox": [
+    {
+      "modifiers": [
+        "Mod",
+        "Shift"
+      ],
+      "key": "Z"
+    }
+  ],
+  "obsidian-zotero-desktop-connector:zdc-exp-Papers": [
+    {
+      "modifiers": [
+        "Mod",
+        "Shift"
+      ],
+      "key": "Z"
+    }
+  ],
+  "painter:open-menu": [
+    {
+      "modifiers": [
+        "Mod",
+        "Shift"
+      ],
+      "key": "P"
+    }
+  ]
+}
