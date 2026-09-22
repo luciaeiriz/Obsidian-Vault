@@ -34,11 +34,9 @@
     "debugMode": false,
     "useInternalPlugins": false
   },
-  "Attachments": "LiImage",
   "Knowledge": "LiBrain",
   "Lab book": "LiBook",
   "Papers": "LiPaperclip",
-  "Rules": "LiFileWarning",
   "Templates": "LiBookTemplate",
   "Papers/Doppler/1. Theory & Measurement Modelling/Doppler characterization for LEO satellites.md": "🔴",
   "Papers/Doppler/3. Navigation & OD/Autonomous Orbit Determination Method Based on Inter-satellite Doppler Measurement.md": "🟢",
@@ -46,7 +44,6 @@
   "Papers/Doppler/3. Navigation & OD/In-Orbit Space Situational Awareness Using Doppler Frequency Shift.md": "🟢",
   "Papers/Doppler/3. Navigation & OD/Autonomous Navigation for Satellite Formations - Advancing Missions Beyond Earth with Inter-satellite Radio Tracking.md": "🟢",
   "Papers/Doppler/3. Navigation & OD/A Double-Difference Doppler Shift-Based Positioning Framework With Ephemeris Error Correction of LEO Satellites.md": "🟡",
-  "Papers/Other OD methods/Efficient Orbit Determination Using Measurement-Directional State Transition Tensor.md": "🟡",
   "Papers/Doppler/2. Signal Processing/Carrier synchronization under Doppler shift of the nongeostationary satellite communication systems.md": "🔴",
   "Papers/Doppler/2. Signal Processing/Doppler Shift Estimation for Satellite Communications using Linear Estimators.md": "🔴",
   "Papers/Doppler/2. Signal Processing/Hera Inter-Satellite link Doppler characterization for Didymos Gravity Science experiments.md": "🟢",
@@ -58,5 +55,6 @@
   "Papers/Doppler/3. Navigation & OD/Opportunistic In-Flight INS Alignment Using LEO Satellites and a Rotatory IMU Platform.md": "🔴",
   "Papers/Doppler/3. Navigation & OD/Receiver Design for Doppler Positioning with Leo Satellites.md": "🟡",
   "Papers/Doppler/3. Navigation & OD/Novel Algorithm for Tracking LEO Satellites Using Doppler Frequency Shift Technique.md": "🟡",
-  "Papers/Doppler/3. Navigation & OD/Revisiting Doppler positioning performance with LEO satellites.md": "🟢"
+  "Papers/Doppler/3. Navigation & OD/Revisiting Doppler positioning performance with LEO satellites.md": "🟢",
+  "Papers/Angle/Efficient Orbit Determination Using Measurement-Directional State Transition Tensor.md": "🟡"
 }

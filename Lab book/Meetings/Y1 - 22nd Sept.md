@@ -7,7 +7,7 @@ For the Doppler simulation:
 	observation arc
 	one orbit more eccentric
 [] alongside the above, try different scenarios which will later be used as a basis to compare the AI with
-	include short observation window
+	include short observation window 
 
 Future: Go back through the chain before going forward
 [] Look into how the signals are detected and how the Doppler shift is calculated
@@ -35,6 +35,3 @@ Conference paper:
 - Also possibly look into angles only OD or range only OD for the AI? 
 - Journal paper (after conference paper) before second year review (before the viva would be great)
 - How doppler/ angle works from an event base. 
-
-
-Picture for ApSTL
