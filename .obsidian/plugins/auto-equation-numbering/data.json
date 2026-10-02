@@ -1,0 +1,9 @@
+{
+  "reuseNumberForDuplicates": true,
+  "enabledFiles": {
+    "Lab book/Y1/1. September.md": {
+      "enabled": true,
+      "format": "default"
+    }
+  }
+}

@@ -7,6 +7,7 @@ Zotero
 Obsidian app
 Python
 MATLAB
+Saved passwords bing
 
 ## Questions / Look into
 What is: EKF, UKF, PINN or Orekit. More precisely what are the main difference

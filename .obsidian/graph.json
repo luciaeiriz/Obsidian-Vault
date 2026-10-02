@@ -1,6 +1,6 @@
 {
   "collapse-filter": false,
-  "search": "-path:Templates -path:Rule",
+  "search": "-path:Templates -path:\"Lab book/Meetings\"  -path:\"To do\" -path:\"Random notes\" ",
   "showTags": false,
   "showAttachments": false,
   "hideUnresolved": false,
@@ -39,6 +39,6 @@
   "repelStrength": 10,
   "linkStrength": 1,
   "linkDistance": 250,
-  "scale": 0.25883865621816027,
-  "close": true
+  "scale": 0.25883865621816016,
+  "close": false
 }
